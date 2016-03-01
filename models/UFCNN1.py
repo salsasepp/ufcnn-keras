@@ -21,11 +21,12 @@ def print_nodes_shapes(model):
         print("{} : {} : {} : {}".format(k, type(v), v.input_shape, v.output_shape))
 
 
+
 sequence_length = 5000      # same as in Roni Mittelman's paper
-features = 4                # guess
+features = 1                # guess changed Ernst 20160301
 nb_filter = 150             # same as in Roni Mittelman's paper
 filter_length = 5           # same as in Roni Mittelman's paper
-output_dim = 3              # guess
+output_dim = 1              # guess changed Ernst 20160301
 
 UFCNN_1 = Graph()
 UFCNN_1.add_input(name='input', input_shape=(sequence_length, features))
@@ -62,5 +63,65 @@ UFCNN_1.compile(optimizer='rmsprop', loss={'output': 'categorical_crossentropy'}
 
 print_nodes_shapes(UFCNN_1)
 
+#########################################################
+## Test the net with damped cosine  / remove later...
+#########################################################
 
+import matplotlib.pyplot as plt
+
+def gen_cosine_amp(amp=100, period=25, x0=0, xn=50000, step=1, k=0.0001):
+    """Generates an absolute cosine time series with the amplitude
+    exponentially decreasing
+    Arguments:
+        amp: amplitude of the cosine function
+        period: period of the cosine function
+        x0: initial x of the time series
+        xn: final x of the time series
+        step: step of the time series discretization
+        k: exponential rate
+
+	Ernst 20160301 from https://github.com/fchollet/keras/blob/master/examples/stateful_lstm.py
+        as a first test for the ufcnn
+    """
+    
+    cos = np.zeros(((xn - x0) * step,  1, 1))
+    print("Cos. Shape",cos.shape)
+    for i in range(len(cos)):
+        idx = x0 + i * step
+        cos[i, 0, 0] = amp * np.cos(idx / (2 * np.pi * period))
+        cos[i, 0, 0] = cos[i, 0, 0] * np.exp(-k * idx)
+    return cos
+
+
+batch_size = 64
+epochs = 11 # TEST
+lahead = 1
+
+cos = gen_cosine_amp(xn = sequence_length * 10)
+
+expected_output = np.zeros((len(cos), 1, 1))
+
+for i in range(len(cos) - lahead):
+    expected_output[i, 0] = np.mean(cos[i + 1:i + lahead + 1])
+
+print('Training')
+for i in range(epochs):
+    print('Epoch', i, '/', epochs)
+    UFCNN_1.fit({'input': cos, 'output': expected_output},
+              verbose=1,
+              nb_epoch=1,
+              shuffle=False)
+
+print('Predicting')
+predicted_output = UFCNN_1.predict({'input': cos,}, batch_size=batch_size)
+
+print('Ploting Results')
+plt.subplot(2, 1, 1)
+plt.plot(expected_output.reshape(-1))
+plt.title('Expected')
+plt.subplot(2, 1, 2)
+plt.plot(predicted_output['output'].reshape(-1))
+plt.title('Predicted')
+plt.savefig('sinus.png')
+#plt.show()
 
