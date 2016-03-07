@@ -100,7 +100,7 @@ def ufcnn_model(sequence_length=5000,
 
     #sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=0.1) slow convergence but no NaN so far
     # learning rate is too high and saturates all those hard sigmoids and then learning dies. using lr = 0.0001 
-    # and clipgrad = 0.8 produces no NAN so far
+    # and clipgrad = 0.5 produces no NAN so far
     # sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True, clipgrad=0.5)
     sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True, clipgrad=0.5)
     model.compile(optimizer=sgd, loss={'output': loss})
