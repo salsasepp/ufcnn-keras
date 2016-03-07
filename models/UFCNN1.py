@@ -99,7 +99,8 @@ def ufcnn_model(sequence_length=5000,
         model.add_output(name='output', input='dense')
 
     #sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=0.1) slow convergence but no NaN so far
-    # learning rate is too high and saturates all those hard sigmoids and then learning dies. using lr = 0.0001 produces no NAN so far
+    # learning rate is too high and saturates all those hard sigmoids and then learning dies. using lr = 0.0001 
+    # and clipgrad = 0.8 produces no NAN so far
     # sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True, clipgrad=0.5)
     sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True, clipgrad=0.5)
     model.compile(optimizer=sgd, loss={'output': loss})
@@ -214,11 +215,18 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     #print("X-Array after")
     #print(X)
 
-
-    ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
-    ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
-    ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
+    # To avoid Input mis-match the number of trade actions = 5 needs to equal the output_dim = 5
+    # logic below needs to be verified -- Developer 20160307
+    #ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
+    #ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
+    #ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
     
+    ydf['sellAtBestBid'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
+    ydf['buyAtBestAsk']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
+    ydf['hold'] = ydf.apply(lambda row: (1 if row['buyAtBestAsk'] < 0.7 and row['sellAtBestBid'] > -0.7 else 0 ), axis=1)
+
+    ydf['sellAtBeskAsk'] = ydf.apply(lambda row: (1 if row['signal'] < 0.9 and row['signal'] >  0.7 else 0 ), axis=1)
+    ydf['buyAtBestBid']  = ydf.apply(lambda row: (1 if row['signal'] > -0.9 and row['signal'] < -0.7 else 0 ), axis=1)
 
     del ydf['signal']
     y = ydf.values
@@ -272,7 +280,7 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
     print ("Total MSError: %8.5f " % (total_error/xdim))
     print ("Correct Class Assignment:  %6d" % (correct_class))
-    
+    print ("Percentage of Correct Class Assignment: %6.3f" % ((correct_class * 100)/xdim))
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
 
@@ -325,7 +333,7 @@ if action == 'tradcom':
     print("Running model: ", action)
     sequence_length = 50
     features = 32
-    output_dim = 3
+    output_dim = 5  # developer-20160307: changed as per Roni's suggestion
          
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
          loss="binary_crossentropy", sequence_length=sequence_length, optimizer="sgd" )
