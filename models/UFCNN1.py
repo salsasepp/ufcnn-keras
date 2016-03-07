@@ -336,5 +336,5 @@ if action == 'tradcom':
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
        loss="categorical_crossentropy", sequence_length=sequence_length, optimizer="sgd" )
     #print_nodes_shapes(UFCNN_TC)
-    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=150, training_count=30, testing_count = 120)
+    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=150, training_count=30, testing_count = 12)
   
