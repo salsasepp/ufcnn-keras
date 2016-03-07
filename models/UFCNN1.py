@@ -1,15 +1,19 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import sys
+import glob
+
 import time
 import numpy as np
 import pandas as pd
+import os.path
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
 from keras.models import Sequential, Graph
 from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, Flatten, Reshape, Permute, Merge, LambdaMerge, Lambda
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D
+from keras.layers.advanced_activations import ParametricSoftplus
 from keras.callbacks import ModelCheckpoint, Callback
 import matplotlib.pyplot as plt
 
@@ -34,8 +38,6 @@ def print_nodes_shapes(model):
         print("{} : {} : {} : {}".format(k, type(v), v.input_shape, v.output_shape))
 
 def save_neuralnet (model, model_name):
-    ## and save model
-    # save as JSON
 
     json_string = model.to_json()
     open(model_name + '_architecture.json', 'w').write(json_string)
@@ -63,46 +65,42 @@ def ufcnn_model(sequence_length=5000,
     model.add_input(name='input', input_shape=(sequence_length, features))
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv1', input='input')
-    model.add_node(Activation('relu'), name='relu1', input='conv1')
+    model.add_node(ParametricSoftplus(), name='relu1', input='conv1')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv2', input='relu1')
-    model.add_node(Activation('relu'), name='relu2', input='conv2')
+    model.add_node(ParametricSoftplus(), name='relu2', input='conv2')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv3', input='relu2')
-    model.add_node(Activation('relu'), name='relu3', input='conv3')
+    model.add_node(ParametricSoftplus(), name='relu3', input='conv3')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv4', input='relu3')
-    model.add_node(Activation('relu'), name='relu4', input='conv4')
+    model.add_node(ParametricSoftplus(), name='relu4', input='conv4')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv5',
                      inputs=['relu2', 'relu4'],
                      merge_mode='sum')
-    model.add_node(Activation('relu'), name='relu5', input='conv5')
+    model.add_node(ParametricSoftplus(), name='relu5', input='conv5')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv6',
                      inputs=['relu1', 'relu5'],
                      merge_mode='sum')
-    model.add_node(Activation('relu'), name='relu6', input='conv6')
+    model.add_node(ParametricSoftplus(), name='relu6', input='conv6')
     #########################################################
     if regression:
         #########################################################
         model.add_node(Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init), name='conv7', input='relu6')
-        model.add_node(Activation('relu'), name='relu7', input='conv7')
+        model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
         model.add_output(name='output', input='conv7')
     else:
         model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv7', input='relu6')
-        model.add_node(Activation('relu'), name='relu7', input='conv7')
+        model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
         model.add_node(Flatten(), name='flatten', input='relu7')
         model.add_node(Dense(output_dim=output_dim, activation='softmax'), name='dense', input='flatten')
         model.add_output(name='output', input='dense')
-
-    #sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=0.1) slow convergence but no NaN so far
-    sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True, clipgrad=0.5)
-    model.compile(optimizer=sgd, loss={'output': loss})
     
-    #model.compile(optimizer=optimizer, loss={'output': loss})
+    model.compile(optimizer=optimizer, loss={'output': loss})
     
     return model
 
@@ -156,48 +154,45 @@ def train_and_predict_regression(model, sequence_length=5000, batch_size=128, ep
 
 
 
-def prepare_tradcom_classification(training = True, sequence_length = 5000, features = 32, output_dim = 3):
+def prepare_tradcom_classification(training = True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt'):
     """
     prepare the datasets for the trading competition. training determines which datasets will be red
     """
 
-    day_file = "prod_data_20130729v.txt"
-    sig_file = "signal_20130729v.csv"
+    day_file = filename
+    sig_file = filename.replace('prod_data','signal')
+    sig_file = sig_file.replace('txt','csv')
+
+    print("Working on files: ",day_file, ", ",sig_file)
+
+    if not os.path.isfile(sig_file):
+        print("File ",sig_file," is not existing. Aborting.")
+        sys.exit()
+
 
     Xdf = pd.read_csv(day_file, sep=" ", index_col = 0, header = None,)
     ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
 
-    #print("Y-Dataframe")
-    #print(ydf)
-    #print("X-Dataframe Before Mean")
-    #print(Xdf)
-
     # subtract the mean rom all rows
     Xdf = Xdf.sub(Xdf.mean())
-    #print("X-Dataframe after Mean")
-    #print(Xdf)
+
     Xdf = Xdf.div(Xdf.std())
-    #print("X-Dataframe after Std")
-    #print(Xdf)
 
     #print("X-Dataframe after standardization")
     #print(Xdf)
-    print("Input check")
-    print("Mean (should be 0)")
-    print (Xdf.mean())
-    print("Variance (should be 1)")
-    print (Xdf.std())
+    #print("Input check")
+    #print("Mean (should be 0)")
+    #print (Xdf.mean())
+    #print("Variance (should be 1)")
+    #print (Xdf.std())
 
     Xdf_array = Xdf.values
-    #print("X Shape before", Xdf_array.shape)
-
     
     X_xdim, X_ydim = Xdf_array.shape
 
     X = np.zeros((X_xdim, sequence_length, X_ydim))
     start_time = time.time()
 
-    ## Optimize using numba ? or np.roll(x,-1,axis=2) and fill only the missing line..
     for i in range (X_xdim):
         for s in range(sequence_length):
             s_i = i- sequence_length + s + 1
@@ -209,67 +204,80 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
 
     #print("Time for Array Fill ", time.time()-start_time)  
 
-    #print("X-Array after")
-    #print(X)
-
-
     ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
     ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
     ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
-    
 
     del ydf['signal']
     y = ydf.values
-
-    #print("y-Array")
-    #print(y)
-    #print("y Shape", y.shape)
 
     return (X,y)
 
 
 
-def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5):
-    lahead = 1
+def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
 
-    X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim)
+    final_loss = 0
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))
 
-    #print('Training')
-    #print(X.shape)
-    #print(y.shape)
+    if len(file_list) == 0:
+        print ("Files ./training_data_large/product_data_*txt and signal_*.csv are needed. Please copy them in the ./training_data_large/ . Aborting.")
+        sys.exit()
+ 
+    line = np.zeros((epochs * training_count,))
 
-    for i in range(epochs):
-        print('Epoch', i, '/', epochs)
-        history = model.fit({'input': X, 'output': y},
-                  verbose=2,
-                  nb_epoch=1,
-                  shuffle=False,
-                  batch_size=batch_size)
-        print(history.history)
-        save_neuralnet (model, "ufcnn_"+str(i))
-        sys.stdout.flush()
+    for j in range(training_count):
+        filename = file_list[j]
+        print('Training: ',filename)
 
-    #print("Predicted")
-    predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
-    #print(predicted_output)
-    yp = predicted_output['output']
-    xdim, ydim = yp.shape
+        X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename)
 
-    ## MSE for testing
-    total_error  = 0
-    correct_class= 0
-    for i in range (xdim):
-        delta = 0.
-        for j in range(ydim):
-            delta += (y[i][j] - yp[i][j]) * (y[i][j] - yp[i][j])
-        #print ("Row %d, MSError: %8.5f " % (i, delta/ydim))
-        total_error += delta
-        if np.argmax(y[i]) == np.argmax(yp[i]):
-            correct_class += 1
+        for i in range(epochs):
+            print('File: ',j,', Epoch: ', i, '/', epochs)
+            history = model.fit({'input': X, 'output': y},
+                      verbose=2,
+                      nb_epoch=1,
+                      shuffle=False,
+                      batch_size=batch_size)
+            print(history.history)
+            sys.stdout.flush()
+            final_loss = history.history['loss']
+            line[j*training_count+i] = final_loss[0]
+
+        save_neuralnet (model, "ufcnn_"+str(j))
+    
+    plt.figure()
+    plt.plot(line) 
+    plt.savefig("Convergence.png")
+    #plt.show()
 
 
-    print ("Total MSError: %8.5f " % (total_error/xdim))
-    print ("Correct Class Assignment:  %6d" % (correct_class))
+    for k in range(testing_count):
+        filename = file_list[training_count + k]
+        print("Predicting: ",filename)
+
+        X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename )
+        predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
+        #print(predicted_output)
+
+        yp = predicted_output['output']
+        xdim, ydim = yp.shape
+    
+        ## MSE for testing
+        total_error  = 0
+        correct_class= 0
+        for i in range (xdim):
+            delta = 0.
+            for j in range(ydim):
+                delta += (y[i][j] - yp[i][j]) * (y[i][j] - yp[i][j])
+                #print ("Row %d, MSError: %8.5f " % (i, delta/ydim))
+
+            total_error += delta
+            if np.argmax(y[i]) == np.argmax(yp[i]):
+                correct_class += 1
+
+        print ("FIN Correct Class Assignment:  %6d /%7d" % (correct_class, xdim))
+        print ("FIN Final Loss:  ", final_loss)
     
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
@@ -324,9 +332,9 @@ if action == 'tradcom':
     sequence_length = 50
     features = 32
     output_dim = 3
-         
+
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
-         loss="binary_crossentropy", sequence_length=sequence_length, optimizer="sgd" )
-    print_nodes_shapes(UFCNN_TC)
-    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=40)
+       loss="categorical_crossentropy", sequence_length=sequence_length, optimizer="sgd" )
+    #print_nodes_shapes(UFCNN_TC)
+    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=150, training_count=30, testing_count = 120)
   
