@@ -224,32 +224,36 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
         print ("Files ./training_data_large/product_data_*txt and signal_*.csv are needed. Please copy them in the ./training_data_large/ . Aborting.")
         sys.exit()
  
-    line = np.zeros((epochs * training_count,))
+    line = []
+    
+    for jj in range(2):
 
-    for j in range(training_count):
-        filename = file_list[j]
-        print('Training: ',filename)
+        for j in range(training_count):
+            filename = file_list[j]
+            print('Training: ',filename)
 
-        X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename)
+            X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename)
 
-        for i in range(epochs):
-            print('File: ',j,', Epoch: ', i, '/', epochs)
+            print('File: ',j )
             history = model.fit({'input': X, 'output': y},
                       verbose=2,
-                      nb_epoch=1,
+                      nb_epoch=epochs,
                       shuffle=False,
                       batch_size=batch_size)
             print(history.history)
             sys.stdout.flush()
             final_loss = history.history['loss']
-            line[j*training_count+i] = final_loss[0]
+            line.extend(final_loss)
 
         save_neuralnet (model, "ufcnn_"+str(j))
     
-    plt.figure()
-    plt.plot(line) 
-    plt.savefig("Convergence.png")
-    #plt.show()
+        plt.figure()
+        plt.plot(line) 
+        plt.savefig("Convergence.png")
+        #plt.show()
+
+    total_class_count = 0
+    total_correct_class_count = 0
 
 
     for k in range(testing_count):
@@ -278,8 +282,14 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
         print ("FIN Correct Class Assignment:  %6d /%7d" % (correct_class, xdim))
         print ("FIN Final Loss:  ", final_loss)
+
+        total_class_count += xdim
+        total_correct_class_count += correct_class
     
+    print ("FINFIN Correct Class Assignment:  %6d /%7d" % (total_correct_class_count, total_class_count))
+
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
+
 
 
 #########################################################
@@ -329,12 +339,15 @@ if action == 'cos':
 
 if action == 'tradcom':
     print("Running model: ", action)
-    sequence_length = 50
+    sequence_length = 500
+    epochs = 50
     features = 32
     output_dim = 3
 
+    sgd = SGD(lr=0.005, decay=1e-6, momentum=0.9, nesterov=True)
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
-       loss="categorical_crossentropy", sequence_length=sequence_length, optimizer="sgd" )
-    #print_nodes_shapes(UFCNN_TC)
-    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=150, training_count=30, testing_count = 12)
+        loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=sgd )
+    print_nodes_shapes(UFCNN_TC)
+
+    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=epochs, training_count=30, testing_count = 8)
   
