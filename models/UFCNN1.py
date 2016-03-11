@@ -17,7 +17,6 @@ from keras.layers.advanced_activations import ParametricSoftplus
 from keras.callbacks import ModelCheckpoint, Callback
 import matplotlib.pyplot as plt
 
-
 def draw_model(model):
     from IPython.display import SVG
     from keras.utils.visualize_util import to_graph
@@ -58,7 +57,7 @@ def ufcnn_model(sequence_length=5000,
                            loss='mse',
                            regression = True,
                            class_mode=None,
-                           init="glorot_uniform"):
+                           init="lecun_uniform"):
     
 
     model = Graph()
@@ -151,10 +150,76 @@ def train_and_predict_regression(model, sequence_length=5000, batch_size=128, ep
     predicted_output = model.predict({'input': cos,}, batch_size=batch_size)
     
     return {'model': model, 'predicted_output': predicted_output, 'expected_output': expected_output}
+def treat_X_tradcom(mean):
+    """ treat some columns of the dataframe together when normalizing the dataframe:
+        col. 1, 2, 4 ... Mkt Price, Bid price, Ask Price
+        col 3 and 5 ... Ask & Bid price
+    """ 
+
+    result = mean.copy()
+    #print("Result before max",result)
+
+    mkt = mean[1]
+    bid_px = mean[2]
+    ask_px = mean[4]
+    px_max=max(mkt,bid_px,ask_px)
+
+    result[1] = px_max
+    result[2] = px_max
+    result[4] = px_max
 
 
+    bid = mean[3]
+    ask = mean[5]
+    ba_max=max(bid,ask)
 
-def prepare_tradcom_classification(training = True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt'):
+    result[3] = ba_max
+    result[5] = ba_max
+
+    print("Result after max",result)
+   
+    return result
+    
+def get_tradcom_normalization(filename, mean=None, std=None):
+    """  read in all X Data Frames and find mean and std of all columns...
+    """
+    Xdf = pd.read_csv(filename, sep=" ", index_col = 0, header = None)
+    meanLoc = treat_X_tradcom(Xdf.mean())
+    #print("Mean Loc")
+    #print (meanLoc)
+    sys.stdout.flush()
+
+    if mean is None:
+        mean = meanLoc
+
+    mean = mean.to_frame().transpose()
+    meanDf=pd.concat([mean, meanLoc.to_frame().transpose()])
+    mean = meanDf.max()
+
+    #print("Mean")
+    #print (mean)
+    sys.stdout.flush()
+
+    stdLoc = treat_X_tradcom(Xdf.std())
+    #print("Std Loc")
+    #print (stdLoc)
+    sys.stdout.flush()
+
+    if std is None:
+        std = stdLoc
+
+    std = std.to_frame().transpose()
+    stdDf=pd.concat([std, stdLoc.to_frame().transpose()])
+    std = stdDf.max()
+
+    #print("Std")
+    #print (std)
+  
+    sys.stdout.flush()
+    return(mean, std)
+
+
+def prepare_tradcom_classification(training = True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt', mean=None, std=None):
     """
     prepare the datasets for the trading competition. training determines which datasets will be red
     """
@@ -174,9 +239,9 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
 
     # subtract the mean rom all rows
-    Xdf = Xdf.sub(Xdf.mean())
-
-    Xdf = Xdf.div(Xdf.std())
+    Xdf = Xdf.sub(mean)
+    Xdf = Xdf.div(std)
+    print(Xdf)
 
     #print("X-Dataframe after standardization")
     #print(Xdf)
@@ -225,18 +290,24 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
         sys.exit()
  
     line = []
-    
-    for jj in range(2):
+    mean = None
+    std  = None
+    for j in range(training_count):
+        filename = file_list[j]
+        print('Normalizing: ',filename)
+        (mean, std) = get_tradcom_normalization(filename = filename, mean = mean, std = std)
 
+
+    for double in range(2):
         for j in range(training_count):
             filename = file_list[j]
             print('Training: ',filename)
 
-            X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename)
+            X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename, mean = mean, std = std)
 
-            print('File: ',j )
+            # running over all epochs to get the optimizer working well...
             history = model.fit({'input': X, 'output': y},
-                      verbose=2,
+                      verbose=1,
                       nb_epoch=epochs,
                       shuffle=False,
                       batch_size=batch_size)
@@ -245,12 +316,12 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
             final_loss = history.history['loss']
             line.extend(final_loss)
 
-        save_neuralnet (model, "ufcnn_"+str(j))
+            save_neuralnet (model, "ufcnn_"+str(j))
     
-        plt.figure()
-        plt.plot(line) 
-        plt.savefig("Convergence.png")
-        #plt.show()
+            plt.figure()
+            plt.plot(line) 
+            plt.savefig("Convergence" + str(double)+".png")
+            #plt.show()
 
     total_class_count = 0
     total_correct_class_count = 0
@@ -260,7 +331,7 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
         filename = file_list[training_count + k]
         print("Predicting: ",filename)
 
-        X,y = prepare_tradcom_classification(training = True, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename )
+        X,y = prepare_tradcom_classification(training = False, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename, mean = mean, std = std )
         predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
         #print(predicted_output)
 
@@ -340,14 +411,14 @@ if action == 'cos':
 if action == 'tradcom':
     print("Running model: ", action)
     sequence_length = 500
-    epochs = 50
     features = 32
     output_dim = 3
+    # Roni used rmsprop
+    sgd = SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=True) 
 
-    sgd = SGD(lr=0.005, decay=1e-6, momentum=0.9, nesterov=True)
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
-        loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=sgd )
-    print_nodes_shapes(UFCNN_TC)
+       loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=sgd )
 
-    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=epochs, training_count=30, testing_count = 8)
+    #print_nodes_shapes(UFCNN_TC)
+    case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=50, training_count=10, testing_count = 12)
   
