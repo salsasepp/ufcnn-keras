@@ -23,7 +23,7 @@ def draw_model(model):
     from keras.utils.visualize_util import plot
 
     SVG(to_graph(model).create(prog='dot', format='svg'))
-    plot(model, to_file='UFCNN/UFCNN_1.png')
+    plot(model, to_file='UFCNN_1.png')
 
 
 def print_nodes_shapes(model):
@@ -48,7 +48,7 @@ def save_neuralnet (model, model_name):
 
         
 
-def ufcnn_model(sequence_length=5000,
+def ufcnn_model_sum(sequence_length=5000,
                            features=1,
                            nb_filter=150,
                            filter_length=5,
@@ -102,6 +102,101 @@ def ufcnn_model(sequence_length=5000,
     model.compile(optimizer=optimizer, loss={'output': loss})
     
     return model
+
+
+def ufcnn_model_concat(sequence_length=5000,
+                           features=1,
+                           nb_filter=150,
+                           filter_length=5,
+                           output_dim=1,
+                           optimizer='adagrad',
+                           loss='mse',
+                           regression = True,
+                           class_mode=None,
+                           init="lecun_uniform"):
+    
+
+    model = Graph()
+    model.add_input(name='input', input_shape=(sequence_length, features))
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv1', input='input')
+    model.add_node(ParametricSoftplus(), name='relu1', input='conv1')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv2', input='relu1')
+    model.add_node(ParametricSoftplus(), name='relu2', input='conv2')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv3', input='relu2')
+    model.add_node(ParametricSoftplus(), name='relu3', input='conv3')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv4', input='relu3')
+    model.add_node(ParametricSoftplus(), name='relu4', input='conv4')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
+                     name='conv5',
+                     inputs=['relu2', 'relu4'],
+                     merge_mode='concat', concat_axis=-1)
+    model.add_node(ParametricSoftplus(), name='relu5', input='conv5')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
+                     name='conv6',
+                     inputs=['relu1', 'relu5'],
+                     merge_mode='concat', concat_axis=-1)
+    model.add_node(ParametricSoftplus(), name='relu6', input='conv6')
+    #########################################################
+    if regression:
+        #########################################################
+        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
+        # model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
+        model.add_output(name='output', input='conv7')
+    else:
+        # model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv7', input='relu6')
+        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
+        model.add_node(Activation('softmax'), name='activation', input='conv7')
+        # model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
+        # model.add_node(Flatten(), name='flatten', input='relu7')
+        # model.add_node(Dense(output_dim=output_dim, activation='softmax'), name='dense', input='flatten')
+        # model.add_node(Dense(output_dim=output_dim, activation='softmax'), name='dense', input='conv7')
+        # model.add_output(name='output', input='dense')
+        model.add_output(name='output', input='activation')
+    
+    model.compile(optimizer=optimizer, loss={'output': loss})
+    
+    return model
+
+
+def ufcnn_model(sequence_length=5000,
+                           features=1,
+                           nb_filter=150,
+                           filter_length=5,
+                           output_dim=1,
+                           optimizer='adagrad',
+                           loss='mse',
+                           regression = True,
+                           class_mode=None,
+                           init="lecun_uniform",
+                           mode='concat'):
+    if mode == 'concat':
+        return ufcnn_model_concat(sequence_length,
+                           features,
+                           nb_filter,
+                           filter_length,
+                           output_dim,
+                           optimizer,
+                           loss,
+                           regression,
+                           class_mode,
+                           init)
+    else:
+        return ufcnn_model_sum(sequence_length,
+                           features,
+                           nb_filter,
+                           filter_length,
+                           output_dim,
+                           optimizer,
+                           loss,
+                           regression,
+                           class_mode,
+                           init)
 
 
 def gen_cosine_amp(amp=100, period=25, x0=0, xn=50000, step=1, k=0.0001):

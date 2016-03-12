@@ -19,7 +19,7 @@ def __main__():
     produces data to train a neural net
     """
     # Trades smaller than this will be omitted
-    min_trade_amount = 0.2
+    min_trade_amount = 1
 
     if len(sys.argv) < 2 :
         print ("Usage: day_trading_file, NOT target_price-file ")
