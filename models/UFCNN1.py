@@ -232,8 +232,8 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     outfile_y = outfile+"_y.npy" 
 
     if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
-        X = np.read(outfile_X)
-        y = np.read(outfile_y)
+        X = np.load(outfile_X)
+        y = np.load(outfile_y)
         print("Found files ", outfile_X , " and ", outfile_y)
         return (X,y)
     
