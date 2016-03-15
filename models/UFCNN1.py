@@ -377,11 +377,11 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     outfile_X = outfile+"_X.npy" 
     outfile_y = outfile+"_y.npy" 
 
-    #if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
-    #    X = np.load(outfile_X)
-    #    y = np.load(outfile_y)
-    #    print("Found files ", outfile_X , " and ", outfile_y)
-    #    return (X,y)
+    if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
+        X = np.load(outfile_X)
+        y = np.load(outfile_y)
+        print("Found files ", outfile_X , " and ", outfile_y)
+        return (X,y)
     
     print("Creating files ", outfile_X , " and ", outfile_y)
 
@@ -397,7 +397,7 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     Xdf = pd.read_csv(day_file, sep=" ", index_col = 0, header = None,)
     ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
     
-    Xdf = Xdf[[2, 3, 4, 5]]
+    # Xdf = Xdf[[2, 3, 4, 5]]
 
     # subtract the mean rom all rows
     # Xdf = Xdf.sub(mean)
