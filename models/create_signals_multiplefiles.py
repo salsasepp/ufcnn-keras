@@ -31,7 +31,7 @@ def __main__():
         filename = file_list[j]
         print('Training: ',filename)
 
-        min_trade_amount = 0.2
+        min_trade_amount = 1
 
         #if len(sys.argv) < 2 :
          #   print ("Usage: day_trading_file, NOT target_price-file ")
