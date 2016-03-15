@@ -245,6 +245,8 @@ def train_and_predict_regression(model, sequence_length=5000, batch_size=128, ep
     predicted_output = model.predict({'input': cos,}, batch_size=batch_size)
     
     return {'model': model, 'predicted_output': predicted_output, 'expected_output': expected_output}
+
+
 def treat_X_tradcom(mean):
     """ treat some columns of the dataframe together when normalizing the dataframe:
         col. 1, 2, 4 ... Mkt Price, Bid price, Ask Price
@@ -274,14 +276,63 @@ def treat_X_tradcom(mean):
     print("Result after max",result)
    
     return result
+
+
+def standardize_inputs(source, colgroups=None):
+    """
+    Standardize input features.
+    Groups of features could be listed in order to be standardized together.
+    source: Pandas.DataFrame or filename of csv file with features
+    colgroups: list of lists of groups of features to be standardized together (e.g. bid/ask price, bid/ask size)
+    returns Pandas.DataFrame
+    """
+    import itertools
+    import types
     
+    if isinstance(source, types.StringTypes):
+        Xdf = pd.read_csv(source, sep=" ", index_col = 0, header = None)
+    elif isinstance(source, pd.DataFrame):
+        Xdf = source
+    else:
+        raise TypeError
+    
+    df = pd.DataFrame()
+    for colgroup in colgroups:
+        _df = standardize_columns(Xdf[colgroup])
+        df = pd.concat([df, _df], axis=1)
+        print(df.shape)
+        
+#     _temp_list = list(itertools.chain.from_iterable(colgroups))
+    separate_features = [col for col in Xdf.columns if col not in list(itertools.chain.from_iterable(colgroups))]
+    print(separate_features)
+    _df = Xdf[separate_features].sub(Xdf[separate_features].mean())
+    _df = _df[separate_features].div(Xdf[separate_features].std())
+    
+    df = pd.concat([df, _df], axis=1)
+    print(df.shape)
+    
+    return df
+
+    
+def standardize_columns(colgroup):
+    """
+    Standardize group of columns together
+    colgroup: Pandas.DataFrame
+    returns: Pandas.DataFrame
+    """
+    centered = colgroup.sub(np.mean(colgroup.values.flatten()))
+    standardized = centered.div(np.std(colgroup.values.flatten()))
+    
+    return standardized
+    
+        
 def get_tradcom_normalization(filename, mean=None, std=None):
     """  read in all X Data Frames and find mean and std of all columns...
     """
     Xdf = pd.read_csv(filename, sep=" ", index_col = 0, header = None)
     meanLoc = treat_X_tradcom(Xdf.mean())
-    #print("Mean Loc")
-    #print (meanLoc)
+    print("Mean Loc")
+    print (meanLoc)
     sys.stdout.flush()
 
     if mean is None:
@@ -291,13 +342,13 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     meanDf=pd.concat([mean, meanLoc.to_frame().transpose()])
     mean = meanDf.max()
 
-    #print("Mean")
-    #print (mean)
+    print("Mean")
+    print (mean)
     sys.stdout.flush()
 
     stdLoc = treat_X_tradcom(Xdf.std())
-    #print("Std Loc")
-    #print (stdLoc)
+    print("Std Loc")
+    print (stdLoc)
     sys.stdout.flush()
 
     if std is None:
@@ -307,8 +358,8 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     stdDf=pd.concat([std, stdLoc.to_frame().transpose()])
     std = stdDf.max()
 
-    #print("Std")
-    #print (std)
+    print("Std")
+    print (std)
   
     sys.stdout.flush()
     return(mean, std)
@@ -326,11 +377,11 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     outfile_X = outfile+"_X.npy" 
     outfile_y = outfile+"_y.npy" 
 
-    if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
-        X = np.load(outfile_X)
-        y = np.load(outfile_y)
-        print("Found files ", outfile_X , " and ", outfile_y)
-        return (X,y)
+    #if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
+    #    X = np.load(outfile_X)
+    #    y = np.load(outfile_y)
+    #    print("Found files ", outfile_X , " and ", outfile_y)
+    #    return (X,y)
     
     print("Creating files ", outfile_X , " and ", outfile_y)
 
@@ -345,11 +396,14 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
 
     Xdf = pd.read_csv(day_file, sep=" ", index_col = 0, header = None,)
     ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
+    
+    Xdf = Xdf[[2, 3, 4, 5]]
 
     # subtract the mean rom all rows
-    Xdf = Xdf.sub(mean)
-    Xdf = Xdf.div(std)
-    #print(Xdf)
+    # Xdf = Xdf.sub(mean)
+    # Xdf = Xdf.div(std)
+    Xdf = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]])
+    print(Xdf.describe())
 
     #print("X-Dataframe after standardization")
     #print(Xdf)
@@ -363,32 +417,52 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     
     X_xdim, X_ydim = Xdf_array.shape
 
-    X = np.zeros((X_xdim - sequence_length, sequence_length, X_ydim), dtype=float)
-    start_time = time.time()
-
-
-    for i in range (0, X_xdim-sequence_length):
-        for s in range(sequence_length):
-                for j in range (X_ydim):
-                    X[i][s][j] = Xdf_array[i+s][j]
-
-    print("Time for Array Fill ", time.time()-start_time)  
+    #X = np.zeros((X_xdim - sequence_length, sequence_length, X_ydim), dtype=float)
+    
+    #start_time = time.time()
+    #for i in range (0, X_xdim-sequence_length):
+    #    for s in range(sequence_length):
+    #            for j in range (X_ydim):
+    #                X[i][s][j] = Xdf_array[i+s][j]
+    #print("Time for Array Fill ", time.time()-start_time)
+    #print(X.shape)
+                    
+    #start_time = time.time()
+    #_X = np.empty((0, sequence_length, features))    
+    X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, features))
+    for i in range(0, Xdf.shape[0]-sequence_length+1):
+         slice = Xdf.values[i:i+sequence_length]
+         X[i] = slice
+    #print("Time for Array Fill ", time.time()-start_time)  
+    print(X.shape)
+    
+    #print(X[-1])
+    #print(_X[-1])
+    print(Xdf.iloc[-5:])
 
     ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
     ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
     ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
 
     del ydf['signal']
-    ydf = ydf[sequence_length:]
-  
-    y = ydf.values
+       
+    #ydf = ydf[sequence_length:]
+    #print(ydf.iloc[-100:])
+    #y = ydf.values
+    y = np.zeros((ydf.shape[0]-sequence_length+1, sequence_length, output_dim))
+    for i in range(0, ydf.shape[0]-sequence_length+1):
+         slice = ydf.values[i:i+sequence_length]
+         y[i] = slice
+    #print("Time for Array Fill ", time.time()-start_time)  
+    print(y.shape)
+    # print(y[-1][-100:])
 
     ## ATTENTION - will save 6 GB per training / testing day!!! Please comment out if you do not want that
     np.save(outfile_X, X)
     np.save(outfile_y, y)
 
-
     return (X,y)
+
 
 def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
 
@@ -405,9 +479,10 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
     for j in range(training_count):
         filename = file_list[j]
         print('Normalizing: ',filename)
-        (mean, std) = get_tradcom_normalization(filename = filename, mean = mean, std = std)
+#        (mean, std) = get_tradcom_normalization(filename = filename, mean = mean, std = std)
+        
 
-    for double in range(2):
+#    for double in range(2):
         for j in range(training_count):
             filename = file_list[j]
             print('Training: ',filename)
@@ -519,7 +594,7 @@ if action == 'cos':
 if action == 'tradcom':
     print("Running model: ", action)
     sequence_length = 500
-    features = 32
+    features = 4
     output_dim = 3
     # Roni used rmsprop
     sgd = SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=True) 
