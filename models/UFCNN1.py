@@ -35,6 +35,12 @@ def print_nodes_shapes(model):
         
     for k, v in model.outputs.items():
         print("{} : {} : {} : {}".format(k, type(v), v.input_shape, v.output_shape))
+        
+        
+def print_layers_shapes(model):
+    for l in model.layers:
+        print("{} : {} : {}".format(type(l), l.input_shape, l.output_shape))
+        
 
 def save_neuralnet (model, model_name):
 
@@ -104,46 +110,47 @@ def ufcnn_model_sum(sequence_length=5000,
     return model
 
 
-def ufcnn_model_concat(sequence_length=5000,
-                           features=1,
-                           nb_filter=150,
-                           filter_length=5,
-                           output_dim=1,
-                           optimizer='adagrad',
-                           loss='mse',
-                           regression = True,
-                           class_mode=None,
-                           init="lecun_uniform"):
+def ufcnn_model_concat(day_data_length=50000,
+                       sequence_length=5000,
+                       features=1,
+                       nb_filter=150,
+                       filter_length=5,
+                       output_dim=1,
+                       optimizer='adagrad',
+                       loss='mse',
+                       regression = True,
+                       class_mode=None,
+                       init="lecun_uniform"):
     
 
     model = Graph()
-    model.add_input(name='input', input_shape=(sequence_length, features))
+    model.add_input(name='input', input_shape=(None, features))
     #########################################################
     model.add_node(ZeroPadding1D(2), name='input_padding', input='input') # to avoid lookahead bias
     #########################################################
-    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init), name='conv1', input='input_padding')
-    model.add_node(ParametricSoftplus(), name='relu1', input='conv1')
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init, input_shape=(sequence_length, features)), name='conv1', input='input_padding')
+    model.add_node(Activation('relu'), name='relu1', input='conv1')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv2', input='relu1')
-    model.add_node(ParametricSoftplus(), name='relu2', input='conv2')
+    model.add_node(Activation('relu'), name='relu2', input='conv2')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv3', input='relu2')
-    model.add_node(ParametricSoftplus(), name='relu3', input='conv3')
+    model.add_node(Activation('relu'), name='relu3', input='conv3')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv4', input='relu3')
-    model.add_node(ParametricSoftplus(), name='relu4', input='conv4')
+    model.add_node(Activation('relu'), name='relu4', input='conv4')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv5',
                      inputs=['relu2', 'relu4'],
                      merge_mode='concat', concat_axis=-1)
-    model.add_node(ParametricSoftplus(), name='relu5', input='conv5')
+    model.add_node(Activation('relu'), name='relu5', input='conv5')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv6',
                      inputs=['relu1', 'relu5'],
                      merge_mode='concat', concat_axis=-1)
-    model.add_node(ParametricSoftplus(), name='relu6', input='conv6')
+    model.add_node(Activation('relu'), name='relu6', input='conv6')
     #########################################################
     if regression:
         #########################################################
@@ -155,6 +162,31 @@ def ufcnn_model_concat(sequence_length=5000,
         model.add_output(name='output', input='activation')
     
     model.compile(optimizer=optimizer, loss={'output': loss})
+    
+    return model
+
+
+def ufcnn_model_seq(sequence_length=5000,
+                           features=1,
+                           nb_filter=150,
+                           filter_length=5,
+                           output_dim=1,
+                           optimizer='adagrad',
+                           loss='mse',
+                           regression = True,
+                           class_mode=None,
+                           init="lecun_uniform"):
+    
+
+    model = Sequential()
+    model.add(ZeroPadding1D(2, input_shape=(None, features)))
+    #########################################################
+    model.add(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init))
+    model.add(Activation('relu'))
+    model.add(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init))
+    model.add(Activation('sigmoid'))
+    
+    model.compile(optimizer=optimizer, loss=loss)
     
     return model
 
