@@ -15,7 +15,7 @@ from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, 
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
 from keras.layers.advanced_activations import ParametricSoftplus
 from keras.callbacks import ModelCheckpoint, Callback
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 def draw_model(model):
     from IPython.display import SVG
@@ -454,7 +454,7 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
         #print("Time for Array Fill ", time.time()-start_time)  
         print(X.shape)
     else:
-        X = Xdf_array
+        X = Xdf_array.reshape((1, Xdf_array.shape[0], Xdf_array.shape[1]))
         
     
     #print(X[-1])
@@ -476,6 +476,7 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
     # print(y[-1][-100:])
     else:
         y = ydf.values
+        y = y.reshape((1, y.shape[0], y.shape[1]))
 
     ## ATTENTION - will save 6 GB per training / testing day!!! Please comment out if you do not want that
     np.save(outfile_X, X)
@@ -571,7 +572,7 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
 
 if len(sys.argv) < 2 :
-    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom]")
+    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom, tradcom_simple]")
     sys.exit()
 
 action = sys.argv[1]
@@ -624,4 +625,17 @@ if action == 'tradcom':
     #print_nodes_shapes(UFCNN_TC)
 
     case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=50, training_count=10, testing_count = 6 )
+if action == 'tradcom_simple':
+    sgd = SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=True)
+    (X, y) = prepare_tradcom_classification(training = True, stack=False, sequence_length = 500, features = 4, output_dim = 3, filename='training_data_large/prod_data_20130729v.txt')
+    print(X.shape)
+    print(y.shape)
+    model = ufcnn_model_concat(day_data_length=50000, regression = False, output_dim=3, features=4, 
+       loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
+    history = model.fit({'input': X, 'output': y},
+                      verbose=2,
+                      nb_epoch=1,
+                      shuffle=False,
+                      batch_size=1)
+    print(history)
   
