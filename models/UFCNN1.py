@@ -12,7 +12,7 @@ from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
 from keras.models import Sequential, Graph
 from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, Flatten, Reshape, Permute, Merge, LambdaMerge, Lambda
-from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D
+from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
 from keras.layers.advanced_activations import ParametricSoftplus
 from keras.callbacks import ModelCheckpoint, Callback
 import matplotlib.pyplot as plt
@@ -119,7 +119,9 @@ def ufcnn_model_concat(sequence_length=5000,
     model = Graph()
     model.add_input(name='input', input_shape=(sequence_length, features))
     #########################################################
-    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv1', input='input')
+    model.add_node(ZeroPadding1D(2), name='input_padding', input='input') # to avoid lookahead bias
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init), name='conv1', input='input_padding')
     model.add_node(ParametricSoftplus(), name='relu1', input='conv1')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv2', input='relu1')
@@ -146,17 +148,10 @@ def ufcnn_model_concat(sequence_length=5000,
     if regression:
         #########################################################
         model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
-        # model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
         model.add_output(name='output', input='conv7')
     else:
-        # model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv7', input='relu6')
         model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
-        model.add_node(Activation('softmax'), name='activation', input='conv7')
-        # model.add_node(ParametricSoftplus(), name='relu7', input='conv7')
-        # model.add_node(Flatten(), name='flatten', input='relu7')
-        # model.add_node(Dense(output_dim=output_dim, activation='softmax'), name='dense', input='flatten')
-        # model.add_node(Dense(output_dim=output_dim, activation='softmax'), name='dense', input='conv7')
-        # model.add_output(name='output', input='dense')
+        model.add_node(Activation('sigmoid'), name='activation', input='conv7')
         model.add_output(name='output', input='activation')
     
     model.compile(optimizer=optimizer, loss={'output': loss})
@@ -365,7 +360,7 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     return(mean, std)
 
 
-def prepare_tradcom_classification(training = True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt', mean=None, std=None):
+def prepare_tradcom_classification(training = True, stack=True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt', mean=None, std=None):
     """
     prepare the datasets for the trading competition. training determines which datasets will be red
     """
@@ -397,7 +392,7 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     Xdf = pd.read_csv(day_file, sep=" ", index_col = 0, header = None,)
     ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
     
-    # Xdf = Xdf[[2, 3, 4, 5]]
+    Xdf = Xdf[[2, 3, 4, 5]]
 
     # subtract the mean rom all rows
     # Xdf = Xdf.sub(mean)
@@ -416,25 +411,18 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     Xdf_array = Xdf.values
     
     X_xdim, X_ydim = Xdf_array.shape
-
-    #X = np.zeros((X_xdim - sequence_length, sequence_length, X_ydim), dtype=float)
     
-    #start_time = time.time()
-    #for i in range (0, X_xdim-sequence_length):
-    #    for s in range(sequence_length):
-    #            for j in range (X_ydim):
-    #                X[i][s][j] = Xdf_array[i+s][j]
-    #print("Time for Array Fill ", time.time()-start_time)
-    #print(X.shape)
-                    
-    #start_time = time.time()
-    #_X = np.empty((0, sequence_length, features))    
-    X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, features))
-    for i in range(0, Xdf.shape[0]-sequence_length+1):
-         slice = Xdf.values[i:i+sequence_length]
-         X[i] = slice
-    #print("Time for Array Fill ", time.time()-start_time)  
-    print(X.shape)
+    if stack:               
+        #start_time = time.time()  
+        X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, features))
+        for i in range(0, Xdf.shape[0]-sequence_length+1):
+            slice = Xdf.values[i:i+sequence_length]
+            X[i] = slice
+        #print("Time for Array Fill ", time.time()-start_time)  
+        print(X.shape)
+    else:
+        X = Xdf_array
+        
     
     #print(X[-1])
     #print(_X[-1])
@@ -445,17 +433,16 @@ def prepare_tradcom_classification(training = True, sequence_length = 5000, feat
     ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
 
     del ydf['signal']
-       
-    #ydf = ydf[sequence_length:]
-    #print(ydf.iloc[-100:])
-    #y = ydf.values
-    y = np.zeros((ydf.shape[0]-sequence_length+1, sequence_length, output_dim))
-    for i in range(0, ydf.shape[0]-sequence_length+1):
-         slice = ydf.values[i:i+sequence_length]
-         y[i] = slice
-    #print("Time for Array Fill ", time.time()-start_time)  
-    print(y.shape)
+
+    if stack:
+        y = np.zeros((ydf.shape[0]-sequence_length+1, sequence_length, output_dim))
+        for i in range(0, ydf.shape[0]-sequence_length+1):
+            slice = ydf.values[i:i+sequence_length]
+            y[i] = slice 
+        print(y.shape)
     # print(y[-1][-100:])
+    else:
+        y = ydf.values
 
     ## ATTENTION - will save 6 GB per training / testing day!!! Please comment out if you do not want that
     np.save(outfile_X, X)
