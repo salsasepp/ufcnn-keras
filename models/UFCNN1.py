@@ -499,9 +499,9 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
     for j in range(training_count):
         filename = file_list[j]
         print('Normalizing: ',filename)
-#        (mean, std) = get_tradcom_normalization(filename = filename, mean = mean, std = std)
+    #    (mean, std) = get_tradcom_normalization(filename = filename, mean = mean, std = std)
         
-
+    # here i removed some intendation
     for j in range(training_count):
         filename = file_list[j]
         print('Training: ',filename)
@@ -521,45 +521,45 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
         save_neuralnet (model, "ufcnn_"+str(j))
     
-        plt.figure()
-        plt.plot(line) 
-        plt.savefig("Convergence" + str(double)+".png")
-        #plt.show()
+    plt.figure()
+    plt.plot(line) 
+    plt.savefig("Convergence.png")
+    #plt.show()
 
-        total_class_count = 0
-        total_correct_class_count = 0
+    total_class_count = 0
+    total_correct_class_count = 0
 
-        for k in range(testing_count):
-            filename = file_list[training_count + k]
-            print("Predicting: ",filename)
+    for k in range(testing_count):
+        filename = file_list[training_count + k]
+        print("Predicting: ",filename)
 
-            X,y = prepare_tradcom_classification(training = False, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename, mean = mean, std = std )
-            predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
-            #print(predicted_output)
+        X,y = prepare_tradcom_classification(training = False, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename, mean = mean, std = std )
+        predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
+        #print(predicted_output)
 
-            yp = predicted_output['output']
-            xdim, ydim = yp.shape
+        yp = predicted_output['output']
+        xdim, ydim = yp.shape
     
-            ## MSE for testing
-            total_error  = 0
-            correct_class= 0
-            for i in range (xdim):
-                delta = 0.
-                for j in range(ydim):
-                    delta += (y[i][j] - yp[i][j]) * (y[i][j] - yp[i][j])
-                    #print ("Row %d, MSError: %8.5f " % (i, delta/ydim))
+        ## MSE for testing
+        total_error  = 0
+        correct_class= 0
+        for i in range (xdim):
+            delta = 0.
+            for j in range(ydim):
+                delta += (y[i][j] - yp[i][j]) * (y[i][j] - yp[i][j])
+                #print ("Row %d, MSError: %8.5f " % (i, delta/ydim))
         
-                total_error += delta
-                if np.argmax(y[i]) == np.argmax(yp[i]):
-                    correct_class += 1
+            total_error += delta
+            if np.argmax(y[i]) == np.argmax(yp[i]):
+                correct_class += 1
 
-            print ("FIN Correct Class Assignment:  %6d /%7d" % (correct_class, xdim))
-            print ("FIN Final Loss:  ", final_loss)
+        print ("FIN Correct Class Assignment:  %6d /%7d" % (correct_class, xdim))
+        print ("FIN Final Loss:  ", final_loss)
 
-            total_class_count += xdim
-            total_correct_class_count += correct_class
-    
-        print ("FINFIN Correct Class Assignment:  %6d /%7d" % (total_correct_class_count, total_class_count))
+        total_class_count += xdim
+        total_correct_class_count += correct_class
+
+    print ("FINFIN Correct Class Assignment:  %6d /%7d" % (total_correct_class_count, total_class_count))
 
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
