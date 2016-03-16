@@ -284,7 +284,8 @@ def standardize_inputs(source, colgroups=None):
     import itertools
     import types
     
-    if isinstance(source, types.StringTypes):
+    #if isinstance(source, types.StringTypes):
+    if isinstance(source, str):
         Xdf = pd.read_csv(source, sep=" ", index_col = 0, header = None)
     elif isinstance(source, pd.DataFrame):
         Xdf = source
