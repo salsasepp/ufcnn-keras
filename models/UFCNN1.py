@@ -7,13 +7,17 @@ import time
 import numpy as np
 import pandas as pd
 import os.path
+import time
+import datetime
+import re
+
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
 from keras.models import Sequential, Graph
 from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, Flatten, Reshape, Permute, Merge, LambdaMerge, Lambda
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
-from keras.layers.advanced_activations import ParametricSoftplus
+from keras.layers.advanced_activations import ParametricSoftplus, SReLU
 from keras.callbacks import ModelCheckpoint, Callback
 #import matplotlib.pyplot as plt
 
@@ -308,7 +312,7 @@ def standardize_inputs(source, colgroups=None):
     Groups of features could be listed in order to be standardized together.
     source: Pandas.DataFrame or filename of csv file with features
     colgroups: list of lists of groups of features to be standardized together (e.g. bid/ask price, bid/ask size)
-    returns Pandas.DataFrame
+    returns Xdf ...Pandas.DataFrame, mean ...Pandas.DataFrame, std ...Pandas.DataFrame
     """
     import itertools
     import types
@@ -322,33 +326,46 @@ def standardize_inputs(source, colgroups=None):
         raise TypeError
     
     df = pd.DataFrame()
+    me = pd.DataFrame()
+    st = pd.DataFrame()
     for colgroup in colgroups:
-        _df = standardize_columns(Xdf[colgroup])
+        _df,_me,_st = standardize_columns(Xdf[colgroup])
         df = pd.concat([df, _df], axis=1)
+        me = pd.concat([me, _me])
+        st = pd.concat([st, _st])
         print(df.shape)
+        print("In Group me")
+        print(me)
         
 #     _temp_list = list(itertools.chain.from_iterable(colgroups))
     separate_features = [col for col in Xdf.columns if col not in list(itertools.chain.from_iterable(colgroups))]
-    print(separate_features)
-    _df = Xdf[separate_features].sub(Xdf[separate_features].mean())
-    _df = _df[separate_features].div(Xdf[separate_features].std())
+    _me = Xdf[separate_features].mean()
+    _df = Xdf[separate_features].sub(_me)
+    _st = Xdf[separate_features].std()
+    _df = _df[separate_features].div(_st)
     
     df = pd.concat([df, _df], axis=1)
-    print(df.shape)
+    me = pd.concat([me, _me])
+    st = pd.concat([st, _st])
     
-    return df
+    return df, me, st
 
     
 def standardize_columns(colgroup):
     """
     Standardize group of columns together
     colgroup: Pandas.DataFrame
-    returns: Pandas.DataFrame
+    returns: Pandas.DataFrames: Colum Group standardized, Mean of the colgroup, stddeviation of the colgroup
     """
-    centered = colgroup.sub(np.mean(colgroup.values.flatten()))
-    standardized = centered.div(np.std(colgroup.values.flatten()))
+    _me = np.mean(colgroup.values.flatten())
+    centered = colgroup.sub(_me)
+    me = pd.DataFrame(np.full(len(colgroup.columns),_me), index=colgroup.columns)
+
+    _st = np.std(colgroup.values.flatten())
+    standardized = centered.div(_st)
+    st = pd.DataFrame(np.full(len(colgroup.columns),_st), index=colgroup.columns)
     
-    return standardized
+    return standardized, me, st
     
         
 def get_tradcom_normalization(filename, mean=None, std=None):
@@ -390,44 +407,83 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     return(mean, std)
 
 
-def prepare_tradcom_classification(training = True, stack=True, sequence_length = 5000, features = 32, output_dim = 3, filename = 'prod_data_20130729v.txt', mean=None, std=None):
+def prepare_tradcom_classification(training=True, stack=True, sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None):
     """
-    prepare the datasets for the trading competition. training determines which datasets will be red
+    prepare the datasets for the trading competition. training determines which datasets will be read
+    returns: X and y: np-Arrays storing the X - and y values for the fitting. 
     """
 
-    day_file = filename
+    Xdf = pd.DataFrame()
+    ydf = pd.DataFrame()
 
-    outfile = filename.replace('prod_data','save_'+str(sequence_length)+'_'+str(features)+'_')
-    outfile = filename.replace('.txt','')
+    outfile = "training_data_large/save_"+str(len(file_list))
+    if training:
+        outfile += "_train"
+    else:
+        outfile += "_test"
+
     outfile_X = outfile+"_X.npy" 
     outfile_y = outfile+"_y.npy" 
+    outfile_m = outfile+"_m.npy" 
+    outfile_s = outfile+"_s.npy" 
+
 
     if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
         X = np.load(outfile_X)
         y = np.load(outfile_y)
+        mean = np.load(outfile_m)
+        std = np.load(outfile_s)
         print("Found files ", outfile_X , " and ", outfile_y)
-        return (X,y)
+        return (X,y,mean,std)
+
+
+    for filename in file_list:
+
+        signalfile = filename.replace('prod_data','signal')
+        signalfile = signalfile.replace('txt','csv')
+
+        print("Working on Input files: ",filename, ", ",signalfile)
+
+        if not os.path.isfile(signalfile):
+            print("File ",signalfile," is not existing. Aborting.")
+            sys.exit()
+
+        # get the date...
+        r = re.compile('^\D*(\d*)\D*', re.UNICODE)
+        date = re.search(r, filename).group(1)
+        print("Date is ",date)
+        date_ux = time.mktime(datetime.datetime.strptime(date,"%Y%m%d").timetuple())
+
+        # load dataframes and reindex
+        Xdf_loc = pd.read_csv(filename, sep=" ", header = None,)
+        # print(Xdf_loc.iloc[:3])
+        Xdf_loc['Milliseconds'] = Xdf_loc[0]
+        Xdf_loc['Date'] = pd.to_datetime(date_ux*1000*1000*1000)
+        # Xdf_loc[0] = pd.to_datetime(date_ux*1000*1000*1000 + Xdf_loc[0]*1000*1000)
+        # Xdf_loc = Xdf_loc.set_index([0])
+        Xdf_loc = Xdf_loc.set_index(['Date', 'Milliseconds'], append=False, drop=True)
+        # print(Xdf_loc.iloc[:3])
+
+        Xdf = pd.concat([Xdf, Xdf_loc])
     
-    print("Creating files ", outfile_X , " and ", outfile_y)
-
-    sig_file = filename.replace('prod_data','signal')
-    sig_file = sig_file.replace('txt','csv')
-
-    print("Working on Input files: ",day_file, ", ",sig_file)
-
-    if not os.path.isfile(sig_file):
-        print("File ",sig_file," is not existing. Aborting.")
-        sys.exit()
-
-    Xdf = pd.read_csv(day_file, sep=" ", index_col = 0, header = None,)
-    ydf = pd.read_csv(sig_file, index_col = 0, names = ['signal',], )
+        ydf_loc = pd.read_csv(signalfile, names = ['Milliseconds','signal',], )
+        # print(ydf_loc.iloc[:3])
+        #ydf_loc['Milliseconds'] = ydf_loc[0]
+        ydf_loc['Date'] = pd.to_datetime(date_ux*1000*1000*1000)
+        #ydf_loc[0] = pd.to_datetime(date_ux*1000*1000*1000 + ydf_loc[0]*1000*1000)
+        #ydf_loc = ydf_loc.set_index([0])
+        ydf_loc = ydf_loc.set_index(['Date', 'Milliseconds'], append=False, drop=True)
+        # print(Xdf_loc.iloc[:3])
     
-    Xdf = Xdf[[2, 3, 4, 5]]
+        ydf = pd.concat([ydf, ydf_loc])
 
-    # subtract the mean rom all rows
-    # Xdf = Xdf.sub(mean)
-    # Xdf = Xdf.div(std)
-    Xdf = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]])
+    #select by features_list
+    Xdf = Xdf[features_list]
+
+    # print("XDF After")
+    # print(Xdf)  
+
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]])
     print(Xdf.describe())
 
     #print("X-Dataframe after standardization")
@@ -437,6 +493,7 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
     #print (Xdf.mean())
     #print("Variance (should be 1)")
     #print (Xdf.std())
+   
 
     Xdf_array = Xdf.values
     
@@ -444,7 +501,7 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
     
     if stack:               
         #start_time = time.time()  
-        X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, features))
+        X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, len(features_list)))
         for i in range(0, Xdf.shape[0]-sequence_length+1):
             slice = Xdf.values[i:i+sequence_length]
             X[i] = slice
@@ -452,7 +509,6 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
         print(X.shape)
     else:
         X = Xdf_array.reshape((1, Xdf_array.shape[0], Xdf_array.shape[1]))
-        
     
     #print(X[-1])
     #print(_X[-1])
@@ -475,11 +531,16 @@ def prepare_tradcom_classification(training = True, stack=True, sequence_length 
         y = ydf.values
         y = y.reshape((1, y.shape[0], y.shape[1]))
 
-    ## ATTENTION - will save 6 GB per training / testing day!!! Please comment out if you do not want that
+
+    m = mean.values
+    s = std.values
+
     np.save(outfile_X, X)
     np.save(outfile_y, y)
-
-    return (X,y)
+    np.save(outfile_m, m)
+    np.save(outfile_s, s)
+   
+    return (X,y,m,s)
 
 
 def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
@@ -531,7 +592,8 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
         filename = file_list[training_count + k]
         print("Predicting: ",filename)
 
-        X,y = prepare_tradcom_classification(training = False, sequence_length = sequence_length, features = features, output_dim = output_dim, filename = filename, mean = mean, std = std )
+        X,y,mean,std = prepare_tradcom_classification(training=False, sequence_length=sequence_length, features=features, output_dim=output_dim, filename=filename, mean=mean, std=std )
+
         predicted_output = model.predict({'input': X,}, batch_size=batch_size, verbose = 2)
         #print(predicted_output)
 
@@ -622,17 +684,36 @@ if action == 'tradcom':
     #print_nodes_shapes(UFCNN_TC)
 
     case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=50, training_count=10, testing_count = 6 )
+
 if action == 'tradcom_simple':
-    sgd = SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=True)
-    (X, y) = prepare_tradcom_classification(training = True, stack=False, sequence_length = 500, features = 4, output_dim = 3, filename='training_data_large/prod_data_20130729v.txt')
+    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+
+    training_count = 2 # Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    testing_count = 2
+
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
+    print ("File list ",file_list)
+
+    features_list = list(range(1,33))
+
+    (X, y, mean, std) = prepare_tradcom_classification(training=True, stack=False, sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
+    ## I am just wondering if mean and std need to be sorted before applying to testing data - I think it does - TODO - check this
+
     print(X.shape)
+    print(X)
     print(y.shape)
-    model = ufcnn_model_concat(regression = False, output_dim=3, features=4, 
+
+    print("Mean")
+    print(mean)
+    print("Std")
+    print(std)
+
+    model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
        loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
     history = model.fit({'input': X, 'output': y},
                       verbose=2,
-                      nb_epoch=1,
+                      nb_epoch=5,
                       shuffle=False,
                       batch_size=1)
-    print(history)
+    print(history.history)
   
