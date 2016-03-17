@@ -110,8 +110,7 @@ def ufcnn_model_sum(sequence_length=5000,
     return model
 
 
-def ufcnn_model_concat(day_data_length=50000,
-                       sequence_length=5000,
+def ufcnn_model_concat(sequence_length=5000,
                        features=1,
                        nb_filter=150,
                        filter_length=5,
@@ -121,8 +120,6 @@ def ufcnn_model_concat(day_data_length=50000,
                        regression = True,
                        class_mode=None,
                        init="lecun_uniform"):
-    
-
     model = Graph()
     model.add_input(name='input', input_shape=(None, features))
     #########################################################
@@ -630,7 +627,7 @@ if action == 'tradcom_simple':
     (X, y) = prepare_tradcom_classification(training = True, stack=False, sequence_length = 500, features = 4, output_dim = 3, filename='training_data_large/prod_data_20130729v.txt')
     print(X.shape)
     print(y.shape)
-    model = ufcnn_model_concat(day_data_length=50000, regression = False, output_dim=3, features=4, 
+    model = ufcnn_model_concat(regression = False, output_dim=3, features=4, 
        loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
     history = model.fit({'input': X, 'output': y},
                       verbose=2,
