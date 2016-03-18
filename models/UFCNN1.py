@@ -26,6 +26,9 @@ def draw_model(model):
     from keras.utils.visualize_util import to_graph
     from keras.utils.visualize_util import plot
 
+    #graph = to_graph(model, show_shape=True)
+    #graph.write_png("UFCNN_1.png")
+
     SVG(to_graph(model).create(prog='dot', format='svg'))
     plot(model, to_file='UFCNN_1.png')
 
@@ -123,35 +126,37 @@ def ufcnn_model_concat(sequence_length=5000,
                        loss='mse',
                        regression = True,
                        class_mode=None,
+                       activation="softplus",
                        init="lecun_uniform"):
     model = Graph()
+   
     model.add_input(name='input', input_shape=(None, features))
     #########################################################
     model.add_node(ZeroPadding1D(2), name='input_padding', input='input') # to avoid lookahead bias
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init, input_shape=(sequence_length, features)), name='conv1', input='input_padding')
-    model.add_node(Activation('relu'), name='relu1', input='conv1')
+    model.add_node(Activation(activation), name='relu1', input='conv1')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv2', input='relu1')
-    model.add_node(Activation('relu'), name='relu2', input='conv2')
+    model.add_node(Activation(activation), name='relu2', input='conv2')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv3', input='relu2')
-    model.add_node(Activation('relu'), name='relu3', input='conv3')
+    model.add_node(Activation(activation), name='relu3', input='conv3')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv4', input='relu3')
-    model.add_node(Activation('relu'), name='relu4', input='conv4')
+    model.add_node(Activation(activation), name='relu4', input='conv4')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv5',
                      inputs=['relu2', 'relu4'],
                      merge_mode='concat', concat_axis=-1)
-    model.add_node(Activation('relu'), name='relu5', input='conv5')
+    model.add_node(Activation(activation), name='relu5', input='conv5')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv6',
                      inputs=['relu1', 'relu5'],
                      merge_mode='concat', concat_axis=-1)
-    model.add_node(Activation('relu'), name='relu6', input='conv6')
+    model.add_node(Activation(activation), name='relu6', input='conv6')
     #########################################################
     if regression:
         #########################################################
@@ -306,7 +311,7 @@ def treat_X_tradcom(mean):
     return result
 
 
-def standardize_inputs(source, colgroups=None):
+def standardize_inputs(source, colgroups=None, mean=None, std=None):
     """
     Standardize input features.
     Groups of features could be listed in order to be standardized together.
@@ -328,26 +333,43 @@ def standardize_inputs(source, colgroups=None):
     df = pd.DataFrame()
     me = pd.DataFrame()
     st = pd.DataFrame()
+
     for colgroup in colgroups:
         _df,_me,_st = standardize_columns(Xdf[colgroup])
+        # if mean & std are given, do not multiply with colgroup mean
+        if mean is not None and std is not None:  
+            _df = Xdf[colgroup]
+
         df = pd.concat([df, _df], axis=1)
         me = pd.concat([me, _me])
         st = pd.concat([st, _st])
-        print(df.shape)
+
         print("In Group me")
         print(me)
         
-#     _temp_list = list(itertools.chain.from_iterable(colgroups))
+    #     _temp_list = list(itertools.chain.from_iterable(colgroups))
     separate_features = [col for col in Xdf.columns if col not in list(itertools.chain.from_iterable(colgroups))]
-    _me = Xdf[separate_features].mean()
-    _df = Xdf[separate_features].sub(_me)
-    _st = Xdf[separate_features].std()
-    _df = _df[separate_features].div(_st)
+    if mean is None and std is None:
+        _me = Xdf[separate_features].mean()
+        _df = Xdf[separate_features].sub(_me)
+        _st = Xdf[separate_features].std()
+        _df = _df[separate_features].div(_st)
+    else:
+        _df = Xdf[separate_features]
+       
     
     df = pd.concat([df, _df], axis=1)
     me = pd.concat([me, _me])
     st = pd.concat([st, _st])
-    
+
+    me = pd.Series(me[0])
+    st = pd.Series(st[0])
+
+    if mean is not None and std is not None:
+     
+        df = df.sub(mean)
+        df = df.div(std)
+
     return df, me, st
 
     
@@ -407,7 +429,7 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     return(mean, std)
 
 
-def prepare_tradcom_classification(training=True, ret_type='df', sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None):
+def prepare_tradcom_classification(training=True, ret_type='df', sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None, training_count=None):
     """
     prepare the datasets for the trading competition. training determines which datasets will be read
     returns: X and y: Pandas.DataFrames or np-Arrays storing the X - and y values for the fitting. 
@@ -422,6 +444,8 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
     save_file = {'df': lambda filename, obj: obj.to_pickle(filename),
                  'stack': lambda filename, obj: np.save(filename, obj),
                  'flat': lambda filename, obj: np.save(filename, obj)}
+
+    print("Features_list",features_list)
     
     Xdf = pd.DataFrame()
     ydf = pd.DataFrame()
@@ -430,26 +454,33 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
     if training:
         outfile += "_train"
     else:
-        outfile += "_test"
+        if training_count is None:
+            print("Training count needs to be given for testing")
+            raise ValueError
+        if mean is None or std is None:
+            print("Mean & std to be given for testing")
+            raise ValueError
+
+        outfile += "_"+str(training_count)+"_test"
         
     filetype = '.pickle' if ret_type == 'df' else '.npy'
 
     outfile_X = outfile+"_X" + filetype
     outfile_y = outfile+"_y" + filetype
-    outfile_m = outfile+"_m.npy" 
-    outfile_s = outfile+"_s.npy" 
-
+    outfile_m = outfile+"_m" + filetype
+    outfile_s = outfile+"_s" + filetype
 
     if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
         X = load_file[ret_type](outfile_X)
         y = load_file[ret_type](outfile_y)
-        X = np.load(outfile_X)
-        y = np.load(outfile_y)
-        mean = np.load(outfile_m)
-        std = np.load(outfile_s)
+        #X = np.load(outfile_X)
+        #y = np.load(outfile_y)
+        if training:
+          mean = pd.Series(np.load(outfile_m))
+          std  = pd.Series(np.load(outfile_s))
+
         print("Found files ", outfile_X , " and ", outfile_y)
         return (X,y,mean,std)
-
 
     for filename in file_list:
 
@@ -496,19 +527,20 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
     #select by features_list
     Xdf = Xdf[features_list]
 
-    # print("XDF After")
-    # print(Xdf)  
+    print("XDF After")
+    print(Xdf)  
 
-    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]])
-    # print(Xdf.describe())
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
 
-    #print("X-Dataframe after standardization")
-    #print(Xdf)
-    #print("Input check")
-    #print("Mean (should be 0)")
-    #print (Xdf.mean())
-    #print("Variance (should be 1)")
-    #print (Xdf.std())
+    # if nothing from above, the use the calculated data
+
+    print("X-Dataframe after standardization")
+    print(Xdf)
+    print("Input check")
+    print("Mean (should be 0)")
+    print (Xdf.mean())
+    print("Variance (should be 1)")
+    print (Xdf.std())
    
 
     Xdf_array = Xdf.values
@@ -529,7 +561,6 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
         X = Xdf
     else:
         raise ValueError
-        
     
     #print(X[-1])
     #print(_X[-1])
@@ -555,17 +586,17 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
     else:
         raise ValueError        
 
-    m = mean.values
-    s = std.values
 
     save_file[ret_type](outfile_X, X)
     save_file[ret_type](outfile_y, y)
     # np.save(outfile_X, X)
     # np.save(outfile_y, y)
-    np.save(outfile_m, m)
-    np.save(outfile_s, s)
+    save_file[ret_type](outfile_m, mean)
+    save_file[ret_type](outfile_s, std)
+    #np.save(outfile_m, m)
+    #np.save(outfile_s, s)
    
-    return (X,y,m,s)
+    return (X,y,mean,std)
 
 
 def generator(X, y):
@@ -573,18 +604,18 @@ def generator(X, y):
     print(X.index.equals(y.index))
     c = 1
     
-    dates = X.index.get_level_values(0).unique()
+    #dates = X.index.get_level_values(0).unique()
     
     while True:
         for date_idx in X.index.get_level_values(0).unique():
-            print(date_idx)
-            print(X.loc[date_idx].shape)
-            print(y.loc[date_idx].shape)
+            #print(date_idx)
+            #print(X.loc[date_idx].shape)
+            #print(y.loc[date_idx].shape)
             X_array = X.loc[date_idx].values
             y_array = y.loc[date_idx].values
             X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
             y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-            print("Yielding samples... ", c)
+            #print("Yielding samples... ", c)
             c += 1
             yield {'input': X_samples, 'output': y_samples}
 
@@ -669,7 +700,36 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
+def check_prediction(y, yp):
+    """ Check the predicted classes and print results
+    """
+    ## MSE for testing
+    total_error  = 0
+    correct_class= 0
 
+
+    y_pred_class = np.zeros((y.shape[2],))
+    y_class      = np.zeros((y.shape[2],))
+
+    for i in range (y.shape[1]):
+        delta = 0.
+        for j in range(y.shape[2]):
+            delta += (y[0][i][j] - yp[0][i][j]) * (y[0][i][j] - yp[0][i][j])
+    
+        total_error += delta
+
+        if np.argmax(y[0][i]) == np.argmax(yp[0][i]):
+            correct_class += 1
+
+        y_pred_class[np.argmax(yp[0][i])] += 1.
+        y_class[np.argmax(y[0][i])] += 1.
+
+    print()
+    print("Total MSE Error: ",  total_error / y.shape[1])
+    print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
+    for i in range(y.shape[2]):
+        print("Predicted %6d/%7d" %(y_pred_class[i], y_class[i]))
+### END
 
 #########################################################
 ## Test the net with damped cosine  / remove later...
@@ -722,7 +782,7 @@ if action == 'tradcom':
     features = 4
     output_dim = 3
     # Roni used rmsprop
-    sgd = SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=True) 
+    sgd = SGD(lr=0.005, decay=1e-6, momentum=0.9, nesterov=True) 
 
     UFCNN_TC = ufcnn_model(regression = False, output_dim=output_dim, features=features, 
        loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=sgd )
@@ -732,7 +792,6 @@ if action == 'tradcom':
     case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=50, training_count=10, testing_count = 6 )
 
 if action == 'tradcom_simple':
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 
     training_count = 2 # Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     testing_count = 2
@@ -746,19 +805,22 @@ if action == 'tradcom_simple':
     ## I am just wondering if mean and std need to be sorted before applying to testing data - I think it does - TODO - check this
 
     print("X shape: ", X.shape)
-    # print(X)
+    print(X)
     print("Y shape: ", y.shape)
 
-    #print("Mean")
-    #print(mean)
-    #print("Std")
-    #print(std)
-    
+    print("Mean")
+    print(mean)
+    print("Std")
+    print(std)
+   
     #for _d in generator(X, y):
     #    print(_d)
 
+    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
     model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
        loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
+
+    #draw_model(model)
     #history = model.fit({'input': X, 'output': y},
     #                  verbose=2,
     #                  nb_epoch=5,
@@ -767,7 +829,31 @@ if action == 'tradcom_simple':
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
                       samples_per_epoch=2,
-                      verbose=2,
-                      nb_epoch=5)
+                      verbose=1,
+                      nb_epoch=500)
     print(history.history)
+
+    save_neuralnet (model, "ufcnn_concat")
+    # and get the files for testing
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+testing_count]
+    print ("File list ",file_list)
+
+    (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list, mean=mean, std=std, training_count=training_count)
   
+    for date_idx in X_pred.index.get_level_values(0).unique():
+        #print(date_idx)
+        #print(X.loc[date_idx].shape)
+        #print(y.loc[date_idx].shape)
+
+        X_array = X_pred.loc[date_idx].values
+        y_array = y_pred.loc[date_idx].values
+        X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+        y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+
+        inp = {'input': X_samples, 'output': y_samples}
+
+        print("Predicting")
+        predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
+        #print(predicted_output['output'])
+
+        check_prediction(y_samples, predicted_output['output'])
