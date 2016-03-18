@@ -407,12 +407,22 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     return(mean, std)
 
 
-def prepare_tradcom_classification(training=True, stack=True, sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None):
+def prepare_tradcom_classification(training=True, ret_type='df', sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None):
     """
     prepare the datasets for the trading competition. training determines which datasets will be read
-    returns: X and y: np-Arrays storing the X - and y values for the fitting. 
+    returns: X and y: Pandas.DataFrames or np-Arrays storing the X - and y values for the fitting. 
+    
+    TODO: refactor - move file operations to separate functions, move stacking to function,
+    remove commented blocks and undesired print statements
     """
-
+    load_file = {'df': pd.read_pickle,
+                 'stack': np.load,
+                 'flat': np.load}
+    
+    save_file = {'df': lambda filename, obj: obj.to_pickle(filename),
+                 'stack': lambda filename, obj: np.save(filename, obj),
+                 'flat': lambda filename, obj: np.save(filename, obj)}
+    
     Xdf = pd.DataFrame()
     ydf = pd.DataFrame()
 
@@ -421,14 +431,18 @@ def prepare_tradcom_classification(training=True, stack=True, sequence_length=50
         outfile += "_train"
     else:
         outfile += "_test"
+        
+    filetype = '.pickle' if ret_type == 'df' else '.npy'
 
-    outfile_X = outfile+"_X.npy" 
-    outfile_y = outfile+"_y.npy" 
+    outfile_X = outfile+"_X" + filetype
+    outfile_y = outfile+"_y" + filetype
     outfile_m = outfile+"_m.npy" 
     outfile_s = outfile+"_s.npy" 
 
 
     if os.path.isfile(outfile_X) and os.path.isfile(outfile_y):
+        X = load_file[ret_type](outfile_X)
+        y = load_file[ret_type](outfile_y)
         X = np.load(outfile_X)
         y = np.load(outfile_y)
         mean = np.load(outfile_m)
@@ -465,6 +479,8 @@ def prepare_tradcom_classification(training=True, stack=True, sequence_length=50
         # print(Xdf_loc.iloc[:3])
 
         Xdf = pd.concat([Xdf, Xdf_loc])
+        print(Xdf.index[0])
+        print(Xdf.index[-1])
     
         ydf_loc = pd.read_csv(signalfile, names = ['Milliseconds','signal',], )
         # print(ydf_loc.iloc[:3])
@@ -484,7 +500,7 @@ def prepare_tradcom_classification(training=True, stack=True, sequence_length=50
     # print(Xdf)  
 
     Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]])
-    print(Xdf.describe())
+    # print(Xdf.describe())
 
     #print("X-Dataframe after standardization")
     #print(Xdf)
@@ -499,7 +515,7 @@ def prepare_tradcom_classification(training=True, stack=True, sequence_length=50
     
     X_xdim, X_ydim = Xdf_array.shape
     
-    if stack:               
+    if ret_type == 'stack':               
         #start_time = time.time()  
         X = np.zeros((Xdf.shape[0]-sequence_length+1, sequence_length, len(features_list)))
         for i in range(0, Xdf.shape[0]-sequence_length+1):
@@ -507,40 +523,70 @@ def prepare_tradcom_classification(training=True, stack=True, sequence_length=50
             X[i] = slice
         #print("Time for Array Fill ", time.time()-start_time)  
         print(X.shape)
-    else:
+    elif ret_type == 'flat':
         X = Xdf_array.reshape((1, Xdf_array.shape[0], Xdf_array.shape[1]))
+    elif ret_type == 'df':
+        X = Xdf
+    else:
+        raise ValueError
+        
     
     #print(X[-1])
     #print(_X[-1])
-    print(Xdf.iloc[-5:])
+    # print(Xdf.iloc[-5:])
 
     ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
     ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
     ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
 
     del ydf['signal']
-
-    if stack:
+    
+    if ret_type == 'stack':   
         y = np.zeros((ydf.shape[0]-sequence_length+1, sequence_length, output_dim))
         for i in range(0, ydf.shape[0]-sequence_length+1):
             slice = ydf.values[i:i+sequence_length]
             y[i] = slice 
         print(y.shape)
-    # print(y[-1][-100:])
-    else:
+    elif ret_type == 'flat':
         y = ydf.values
         y = y.reshape((1, y.shape[0], y.shape[1]))
-
+    elif ret_type == 'df':
+        y = ydf
+    else:
+        raise ValueError        
 
     m = mean.values
     s = std.values
 
-    np.save(outfile_X, X)
-    np.save(outfile_y, y)
+    save_file[ret_type](outfile_X, X)
+    save_file[ret_type](outfile_y, y)
+    # np.save(outfile_X, X)
+    # np.save(outfile_y, y)
     np.save(outfile_m, m)
     np.save(outfile_s, s)
    
     return (X,y,m,s)
+
+
+def generator(X, y):
+    print("Call to generator")
+    print(X.index.equals(y.index))
+    c = 1
+    
+    dates = X.index.get_level_values(0).unique()
+    
+    while True:
+        for date_idx in X.index.get_level_values(0).unique():
+            print(date_idx)
+            print(X.loc[date_idx].shape)
+            print(y.loc[date_idx].shape)
+            X_array = X.loc[date_idx].values
+            y_array = y.loc[date_idx].values
+            X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+            y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+            print("Yielding samples... ", c)
+            c += 1
+            yield {'input': X_samples, 'output': y_samples}
 
 
 def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
@@ -696,24 +742,32 @@ if action == 'tradcom_simple':
 
     features_list = list(range(1,33))
 
-    (X, y, mean, std) = prepare_tradcom_classification(training=True, stack=False, sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
+    (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
     ## I am just wondering if mean and std need to be sorted before applying to testing data - I think it does - TODO - check this
 
-    print(X.shape)
-    print(X)
-    print(y.shape)
+    print("X shape: ", X.shape)
+    # print(X)
+    print("Y shape: ", y.shape)
 
-    print("Mean")
-    print(mean)
-    print("Std")
-    print(std)
+    #print("Mean")
+    #print(mean)
+    #print("Std")
+    #print(std)
+    
+    #for _d in generator(X, y):
+    #    print(_d)
 
     model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
        loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
-    history = model.fit({'input': X, 'output': y},
+    #history = model.fit({'input': X, 'output': y},
+    #                  verbose=2,
+    #                  nb_epoch=5,
+    #                  shuffle=False,
+    #                  batch_size=1)
+    history = model.fit_generator(generator(X, y),
+                      nb_worker=1,
+                      samples_per_epoch=2,
                       verbose=2,
-                      nb_epoch=5,
-                      shuffle=False,
-                      batch_size=1)
+                      nb_epoch=5)
     print(history.history)
   
