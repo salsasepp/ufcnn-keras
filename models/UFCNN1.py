@@ -15,6 +15,8 @@ from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
 from keras.models import Sequential, Graph
+from keras.models import model_from_json
+
 from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, Flatten, Reshape, Permute, Merge, LambdaMerge, Lambda
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
 from keras.layers.advanced_activations import ParametricSoftplus, SReLU
@@ -59,7 +61,23 @@ def save_neuralnet (model, model_name):
     with open(model_name + '_data.yml', 'w') as outfile:
         outfile.write( yaml_string)
 
-        
+def load_neuralnet(model_name):
+    """ 
+    reading the model from disk - including all the trained weights and the complete model design (hyperparams, planes,..)
+    """
+
+    arch_name = model_name + '_architecture.json'
+    weight_name = model_name + '_weights.h5'
+
+    if not os.path.isfile(arch_name) or not os.path.isfile(weight_name):
+        print("model_name given and file %s and/or %s not existing. Aborting." % (arch_name, weight_name))
+        sys.exit()
+
+    print("Loaded model: ",model_name)
+
+    model = model_from_json(open(arch_name).read())
+    model.load_weights(weight_name)
+    return model
 
 def ufcnn_model_sum(sequence_length=5000,
                            features=1,
@@ -707,9 +725,9 @@ def check_prediction(y, yp):
     total_error  = 0
     correct_class= 0
 
-
     y_pred_class = np.zeros((y.shape[2],))
     y_class      = np.zeros((y.shape[2],))
+    a=['Sell','Buy','Hold']
 
     for i in range (y.shape[1]):
         delta = 0.
@@ -728,7 +746,7 @@ def check_prediction(y, yp):
     print("Total MSE Error: ",  total_error / y.shape[1])
     print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
     for i in range(y.shape[2]):
-        print("Predicted %6d/%7d" %(y_pred_class[i], y_class[i]))
+        print("%4s: Predicted  %6d/%7d" %(a[i], y_pred_class[i], y_class[i]))
 ### END
 
 #########################################################
@@ -737,10 +755,17 @@ def check_prediction(y, yp):
 
 
 if len(sys.argv) < 2 :
-    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom, tradcom_simple]")
+    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom, tradcom_simple] [model_name]")
+    print("       ... with model_name = name of the saved file (without addition like _architecture...) to load the net from file")
+
     sys.exit()
 
 action = sys.argv[1]
+
+if len(sys.argv) == 3:
+    model_name = sys.argv[2]
+else:
+    model_name = None
 
 
 sequence_length = 64        # same as in Roni Mittelman's paper - this is 2 times 32 - a line in Ronis input contains 33 numbers, but 1 is time and is omitted
@@ -816,9 +841,15 @@ if action == 'tradcom_simple':
     #for _d in generator(X, y):
     #    print(_d)
 
-    sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
-    model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-       loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
+    sgd = SGD(lr=0.0003, decay=1e-6, momentum=0.9, nesterov=True)
+
+
+    # load the model from disk if model name is given...
+    if model_name is not None:
+        model = load_neuralnet(model_name)
+    else:
+        model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
+           loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
 
     #draw_model(model)
     #history = model.fit({'input': X, 'output': y},
@@ -830,20 +861,19 @@ if action == 'tradcom_simple':
                       nb_worker=1,
                       samples_per_epoch=2,
                       verbose=1,
-                      nb_epoch=500)
+                      nb_epoch=5)
     print(history.history)
 
     save_neuralnet (model, "ufcnn_concat")
+
+
     # and get the files for testing
     file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+testing_count]
-    print ("File list ",file_list)
 
     (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list, mean=mean, std=std, training_count=training_count)
-  
+
+    i=1  
     for date_idx in X_pred.index.get_level_values(0).unique():
-        #print(date_idx)
-        #print(X.loc[date_idx].shape)
-        #print(y.loc[date_idx].shape)
 
         X_array = X_pred.loc[date_idx].values
         y_array = y_pred.loc[date_idx].values
@@ -852,8 +882,8 @@ if action == 'tradcom_simple':
 
         inp = {'input': X_samples, 'output': y_samples}
 
-        print("Predicting")
+        print("Predicting: day ",i ,": ", date_idx)
         predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
-        #print(predicted_output['output'])
 
         check_prediction(y_samples, predicted_output['output'])
+        i += 1
