@@ -816,7 +816,7 @@ if action == 'tradcom_simple':
     #for _d in generator(X, y):
     #    print(_d)
 
-    sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
     model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
        loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
 
