@@ -21,7 +21,7 @@ from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, 
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
 from keras.layers.advanced_activations import ParametricSoftplus, SReLU
 from keras.callbacks import ModelCheckpoint, Callback
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 def draw_model(model):
     from IPython.display import SVG
@@ -749,13 +749,86 @@ def check_prediction(y, yp):
         print("%4s: Predicted  %6d/%7d" %(a[i], y_pred_class[i], y_class[i]))
 ### END
 
+
+def get_tracking_data (sequence_length=5000, count=2000, D=10, delta=0.3, omega_w=0.005, omega_ny=0.005):
+    """ get tracking data for a target moving in a square with 2D side length 
+        delta ... radius of the round target
+        omega_ ... random noise strength
+    """
+    
+    A = np.array([[1,1,0,0],[0,1,0,0],[0,0,1,1],[0,0,0,1]])
+
+    X = np.zeros((count,sequence_length,1))
+    y = np.zeros((count,sequence_length,2))
+ 
+    
+    for i in range(count):
+        z_t = np.random.normal(1,.5,4)
+        g_t = np.random.normal(1,.5,4)
+    
+        x_t  = z_t[0]
+        xp_t = z_t[1]
+        y_t  = z_t[2]
+        yp_t = z_t[3]
+
+        for j in range(sequence_length):     
+
+            # reflect at the border of the square with length 2D
+            if -D + delta < x_t and x_t < D - delta:
+                xp_new_t = xp_t
+            elif -D + delta <= x_t:
+                xp_new_t = -abs(xp_t)
+            else:
+                xp_new_t = abs(xp_t)
+
+            if -D + delta < y_t and y_t < D - delta:
+                yp_new_t = yp_t
+            elif -D + delta <= y_t:
+                yp_new_t = -abs(yp_t)
+            else:
+                yp_new_t = abs(yp_t)
+
+            g_t[0] = x_t
+            g_t[1] = xp_new_t
+            g_t[2] = y_t
+            g_t[3] = yp_new_t
+      
+            w_t = np.random.normal(0.,0.5*omega_w,4)
+            w_t[1] = 0.
+            w_t[3] = 0.
+
+            ny_t = np.random.normal(0.,0.5*omega_ny,1)
+ 
+            z_t = np.dot(A, g_t) + w_t
+
+       
+
+            x_t  = z_t[0]
+            xp_t = z_t[1]
+            y_t  = z_t[2]
+            yp_t = z_t[3]
+            
+
+            theta = np.arctan(y_t/x_t) + ny_t[0]
+
+            # params for the nn
+            # learn to predict x&y by bearing (theta)
+            X[i][j][0] = theta
+            y[i][j][0] = x_t
+            y[i][j][1] = y_t
+            #print ("X_T: ", x_t, ", Y_T: ",y_t)
+
+    return (X,y)
+ 
+        
+
 #########################################################
 ## Test the net with damped cosine  / remove later...
 #########################################################
 
 
 if len(sys.argv) < 2 :
-    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom, tradcom_simple] [model_name]")
+    print ("Usage: UFCNN1.py action    with action from [cos_small, cos, tradcom, tradcom_simple, tracking] [model_name]")
     print("       ... with model_name = name of the saved file (without addition like _architecture...) to load the net from file")
 
     sys.exit()
@@ -816,6 +889,31 @@ if action == 'tradcom':
 
     case_tc = train_and_predict_classification(UFCNN_TC, features=features, output_dim=output_dim, sequence_length=sequence_length, epochs=50, training_count=10, testing_count = 6 )
 
+if action == 'tracking':
+    print("Running model: ", action)
+    sequence_length = 5000
+    count=2000
+    output_dim = 2
+    # Roni used rmsprop
+    sgd = SGD(lr=0.005, decay=1e-6, momentum=0.9, nesterov=True) 
+
+    model = ufcnn_model_concat(regression = True, output_dim=output_dim, features=features, 
+       loss="mse", sequence_length=sequence_length, optimizer=sgd )
+
+    #print_nodes_shapes(UFCNN_TC)
+    (X,y) = get_tracking_data (sequence_length=sequence_length, count=count)
+
+    #plt.figure()
+    #plt.plot(x1, y1) 
+    #plt.savefig("TrackingTracking.png")
+
+
+    history = model.fit({'input': X, 'output': y},
+                      verbose=1,
+                      nb_epoch=30)
+    print(history.history)
+
+
 if action == 'tradcom_simple':
 
     training_count = 2 # Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
@@ -851,18 +949,23 @@ if action == 'tradcom_simple':
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
            loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
 
+
     #draw_model(model)
     #history = model.fit({'input': X, 'output': y},
     #                  verbose=2,
     #                  nb_epoch=5,
     #                  shuffle=False,
     #                  batch_size=1)
+
+    start_time = time.time()
+    epoch = 30
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
                       samples_per_epoch=2,
                       verbose=1,
-                      nb_epoch=5)
+                      nb_epoch=epoch)
     print(history.history)
+    print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
     save_neuralnet (model, "ufcnn_concat")
 
