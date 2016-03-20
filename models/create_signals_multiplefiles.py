@@ -70,6 +70,9 @@ def __main__():
         last_signal = 0
         trade_count = 0
         trade_sum = 0
+        positive_signal = 0
+        negative_signal = 0
+        zero_signal = 0
 
         df['signal'] = np.sign(df.shftret_)
 
@@ -87,6 +90,13 @@ def __main__():
                df.loc[index,'signal'] = last_signal
            trade_sum += row['absret_']
            df.loc[index,'tradeid'] = trade_count
+           # Count the signals in a single signal file and review the bias
+           if row.signal == 1:
+               positive_signal += 1
+           if row.signal == -1:
+               negative_signal += 1
+           if row.signal == 0:
+               zero_signal += 1
 
         df.loc[df['tradeid'].isin(notrade_list),'signal']=0.
         df.loc[df['tradeid'].isin(notrade_list),'absret_']=0.
@@ -103,6 +113,13 @@ def __main__():
         print("Max. theoret. PNL    : ", df.sum().absret_)
         print("Max. number of trades: ", trade_count - len(notrade_list))
         print("Min Trading Amount   : ", min_trade_amount)
-
+        print(' ')
+        print("=====================================================")
+        print(' ')
+        print("Positive Signals ( 1 )   : ", positive_signal)
+        print("Zero Signals     ( 0 )   : ", zero_signal)
+        print("Negative Signals (-1 )   : ", negative_signal)
+        print(' ')
+        print("=====================================================")
 
 __main__();
