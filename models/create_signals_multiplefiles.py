@@ -121,5 +121,10 @@ def __main__():
         print("Negative Signals (-1 )   : ", negative_signal)
         print(' ')
         print("=====================================================")
+        # Use the following grep commands in the directory containing the signal files to count
+        # the total positive, zero & negative signals in all the signal files ---suggested by stefan
+        # grep ",1.0" signal*.csv | wc -l
+        # grep ",0.0" signal*.csv | wc -l
+        # grep ",-1.0" signal*.csv | wc -l
 
 __main__();
