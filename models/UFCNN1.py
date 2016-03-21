@@ -892,16 +892,20 @@ if action == 'tradcom':
 if action == 'tracking':
     print("Running model: ", action)
     sequence_length = 5000
-    count=2000
+    count=20
     output_dim = 2
     # Roni used rmsprop
-    sgd = SGD(lr=0.005, decay=1e-6, momentum=0.9, nesterov=True) 
+    sgd = SGD(lr=0.00005, decay=1e-6, momentum=0.9, nesterov=True) 
+    rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-06)
 
     model = ufcnn_model_concat(regression = True, output_dim=output_dim, features=features, 
-       loss="mse", sequence_length=sequence_length, optimizer=sgd )
+       loss="mse", sequence_length=sequence_length, optimizer=rms )
 
     #print_nodes_shapes(UFCNN_TC)
     (X,y) = get_tracking_data (sequence_length=sequence_length, count=count)
+
+    X = np.subtract(X,X.mean())
+    y = np.subtract(y,y.mean())
 
     #plt.figure()
     #plt.plot(x1, y1) 
@@ -910,7 +914,7 @@ if action == 'tracking':
 
     history = model.fit({'input': X, 'output': y},
                       verbose=1,
-                      nb_epoch=30)
+                      nb_epoch=300)
     print(history.history)
 
 
