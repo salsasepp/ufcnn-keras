@@ -66,13 +66,50 @@ def find_signals(df, sig_type, comission=0.0, debug=False):
 
 def filter_signals(df):
     buys = df["Buy"] + df["Buy Close"]
-    df["Buy"] = np.zeros(df.shape[0])
-    df["Buy"][buys == 2] = 1
+    df["Buy Mod"] = np.zeros(df.shape[0])
+    df["Buy Mod"][buys == 2] = 1
     sells = df["Sell"] + df["Sell Close"]
-    df["Sell"] = np.zeros(df.shape[0])
-    df["Sell"][sells == 2] = 1
+    df["Sell Mod"] = np.zeros(df.shape[0])
+    df["Sell Mod"][sells == 2] = 1
     
-    df = df.drop(["Buy Close", "Sell Close"], axis=1)
+    iterator = df.iterrows()
+    current_signal = 0
+    
+    for idx, row in iterator:
+        current_signal = row["Buy Mod"] - row["Sell Mod"]
+        
+        if current_signal != 0:
+            print("Signal {} at {}".format(current_signal, idx))
+            inner_iterator = df.loc[idx:].iterrows()
+            inner_iterator.next()
+            for inner_idx, inner_row in inner_iterator:
+                next_signal = inner_row["Buy Mod"] - inner_row["Sell Mod"]
+                if next_signal == current_signal:
+                    print("Consecutive similar signal {} at {}".format(next_signal, inner_idx))
+                    if current_signal == 1:
+                        df_slice = df.loc[idx:inner_idx]
+                        candidates = df_slice[df_slice["Sell"] == 1]
+                        best_candidate = candidates["bidpx_"].idxmax()
+                        print(df.loc[best_candidate])
+                        df["Sell Mod"].loc[best_candidate] = 1
+                        break
+                    elif current_signal == -1:
+                        df_slice = df.loc[idx:inner_idx]
+                        candidates = df_slice[df_slice["Buy"] == 1]
+                        best_candidate = candidates["askpx_"].idxmin()
+                        print(df.loc[best_candidate])
+                        df["Buy Mod"].loc[best_candidate] = 1
+                        break
+                elif next_signal != 0 and next_signal != current_signal:
+                    break
+                    
+    df["Buy Open"] = df["Buy"]
+    df["Sell Open"] = df["Sell"]
+    df = df.drop(["Buy", "Sell"], axis=1)
+    print(df.columns)
+    df = df.rename(columns={"Buy Mod": "Buy", "Sell Mod": "Sell"})
+    print(df.columns)
+    # df = df.drop(["Buy Close", "Sell Close"], axis=1)
     return df
 
 
@@ -86,16 +123,16 @@ def make_spans(df, sig_type):
         iterator = reversed_df.loc[idx:].iterrows()
         _d = print("Outer loop:", idx, signal_val["askpx_"]) if sig_type == "Buy" else print("Outer loop:", idx, signal_val["bidpx_"])
         for i, val in iterator:
-            _d = print("Inner loop:", i, val["askpx_"]) if sig_type == "Buy" else print("Inner loop:", i, val["bidpx_"])
+            # _d = print("Inner loop:", i, val["askpx_"]) if sig_type == "Buy" else print("Inner loop:", i, val["bidpx_"])
             if sig_type == "Buy":
                 if val["askpx_"] == signal_val["askpx_"]:
-                    print("Add to buys")
+                    # print("Add to buys")
                     df[span_colname][i] = 1
                 else:
                     break
             elif sig_type == "Sell":
                 if val["bidpx_"] == signal_val["bidpx_"]:
-                    print("Add to sells")
+                    # print("Add to sells")
                     df[span_colname][i] = 1
                 else:
                     break
