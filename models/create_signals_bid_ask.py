@@ -142,16 +142,22 @@ def __main__():
 
 
     day_file = sys.argv[1]
-
+    
+    try:
+        write_spans = True if sys.argv[2] == "--spans" else False
+    except IndexError:
+        write_spans = False
 
     if "_2013" in day_file: 
         month = day_file.split("_")[2].split(".")[0]
-        write_file = "signal_" + month + ".csv"
+        write_signal_file = "signal_" + month + ".csv"
+        write_signals_file = "signals_" + month + ".pickle"
     else:
-        write_file = "signal.csv"
+        write_signal_file = "signal.csv"
+        write_signals_file = "signals.pickle"
 
     print("Processing file ",day_file)
-    print("Writing to file ",write_file)
+    print("Writing to files {}, {}".format(write_signal_file, write_signals_file))
 
     df = pd.read_csv(day_file, sep=" ", usecols=[0,1,2,3,4,5], index_col = 0, header = None, names = ["time","mp","bidpx_","bidsz_","askpx_","asksz_",])
     df = find_signals(df, "Buy")
@@ -162,13 +168,14 @@ def __main__():
     
     df['signal'] = np.zeros(df.shape[0])
     
-    df['signal'][df["Buy"] == 1] = 1.0
-    df['signal'][df["Sell"] == 1] = -1.0
+    if write_spans:
+        df['signal'][df["Buys"] == 1] = 1.0
+        df['signal'][df["Sells"] == 1] = -1.0
+        print("Saving spanned signals instead of point signals!")
+    else:
+        df['signal'][df["Buy"] == 1] = 1.0
+        df['signal'][df["Sell"] == 1] = -1.0
     
-    # and write the signal 
-    signal_df = df[['signal', 'Buy', 'Sell', 'Buys', 'Sells']]
-    signal_df.to_csv(write_file)
-
     #print ("Trades")
     #print(trades2_df)
     #print(trades3_df)
@@ -179,6 +186,13 @@ def __main__():
     print("Max. theoret. return : ", _pnl / df["mp"].iloc[0])
     print("Max. number of trades: ", trade_count)
     print("Min Trading Amount   : ", min_trade_amount)
-
+    
+    # and write the signal 
+    df = df[['signal', 'Buy', 'Sell', 'Buys', 'Sells']]
+    signal_df = df['signal']
+    df.to_pickle(write_signals_file)
+    signal_df.to_csv(write_signal_file)
+    print("Results saved")
+    
 
 __main__();
