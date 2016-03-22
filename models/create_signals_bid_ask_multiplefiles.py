@@ -160,7 +160,7 @@ def __main__():
         #day_file = sys.argv[1]
 
         try:
-            write_spans = True if sys.argv[2] == "--spans" else False
+            write_spans = True if sys.argv[1] == "--spans" else False
         except IndexError:
             write_spans = False
 
