@@ -206,7 +206,8 @@ def filter_signals(df):
         if current_signal != 0:
             print("Signal {} at {}".format(current_signal, idx))
             inner_iterator = df.loc[idx:].iterrows()
-            inner_iterator.next()
+            #inner_iterator.next()  # works in python 2.x but not in python 3.x
+            inner_iterator.__next__()  # or next(inner_iterator)  in python 3.x+
             for inner_idx, inner_row in inner_iterator:
                 next_signal = inner_row["Buy Mod"] - inner_row["Sell Mod"]
                 if next_signal == current_signal:
