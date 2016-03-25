@@ -37,7 +37,8 @@ def find_all_signals(_df, comission=0.0, max_position_size=1, debug=False):
         #for i in range(0, 100):
                 idx_open, next_idx, row_open, sig_type_open = next_signal(iterator, df)
                 iterator = inflection_points.loc[next_idx:].iterrows()
-                iterator.next()
+                #iterator.next()  # works in python 2.x but not in python 3.x
+                iterator.__next__()  # or next(iterator)  in python 3.x+
                 df[sig_type_open][idx_open] = 1
     except TypeError:
         print("Iteration stopped")
@@ -45,7 +46,8 @@ def find_all_signals(_df, comission=0.0, max_position_size=1, debug=False):
     print("Buy candidates: {} Sell candidates: {}".format(df[df['Buy'] != 0].count()['Buy'], df[df['Sell'] != 0].count()['Sell']))
         
     candidates = df[(df['Buy'] != 0) | (df['Sell'] != 0)].iterrows()
-    idx_open, row_open = candidates.next()
+    #idx_open, row_open = candidates.next()  # works in python 2.x but not in python 3.x
+    idx_open, row_open = candidates.__next__()  # or use  next(candidates)  in python 3.x+
     for idx, row in candidates:
         if row_open['Buy'] == 1 and (df["bidpx_"][idx] > (df["askpx_"][idx_open] + comission)):
             df['Buy Mod'][idx_open] += 1
@@ -298,13 +300,15 @@ def pnl(df, chained=False):
 def generate_signals_for_file(day_file, comission=0.0, write_spans=False, chained_deals=False, min_trade_amount=None):
     (path, filename) = os.path.split(day_file)
     
+    path = "./training_data_large/"  # to make sure signal files are written in same directory as data files
+    
     if "_2013" in filename: 
         month = filename.split("_")[2].split(".")[0]
-        write_signal_file = "signal_" + month + ".csv"
-        write_signals_file = "signals_" + month + ".pickle"
+        write_signal_file = path + "signal_" + month + ".csv"
+        write_signals_file = path + "signals_" + month + ".pickle"
     else:
-        write_signal_file = "signal.csv"
-        write_signals_file = "signals.pickle"
+        write_signal_file = path + "signal.csv"
+        write_signals_file = path + "signals.pickle"
 
     print("Processing file ",day_file)
     print("Writing to files {}, {}".format(write_signal_file, write_signals_file))
