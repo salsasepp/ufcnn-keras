@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import sys
 from copy import copy, deepcopy
+import os.path
 
 import numpy as np
 #import matplotlib.pyplot as plt
@@ -10,8 +11,6 @@ import numpy as np
 import pandas as pd
 pd.set_option('display.width',    1000)
 pd.set_option('display.max_rows', 1000)
-
-from signals import *
 
 
 def find_all_signals(_df, comission=0.0, max_position_size=1, debug=False):
@@ -296,36 +295,54 @@ def pnl(df, chained=False):
         return np.sum(deals), len(deals)
     
     
-def __main__():
-    """ 
-    Trading Simulator from curriculumvite trading competition
-    see also the arvix Paper from Roni Mittelman http://arxiv.org/pdf/1508.00317v1
-    Modified by Ernst.Tmp@gmx.at
+def generate_signals_for_file(day_file, comission=0.0, write_spans=False, chained_deals=False, min_trade_amount=None):
+    (path, filename) = os.path.split(day_file)
     
-    produces data to train a neural net
-    """
-    # Trades smaller than this will be omitted
-    min_trade_amount = None
-    comission = 0.0
+    if "_2013" in filename: 
+        month = filename.split("_")[2].split(".")[0]
+        write_signal_file = "signal_" + month + ".csv"
+        write_signals_file = "signals_" + month + ".pickle"
+    else:
+        write_signal_file = "signal.csv"
+        write_signals_file = "signals.pickle"
 
-    if len(sys.argv) < 2 :
-        print ("Usage: day_trading_file, NOT target_price-file ")
-        sys.exit()
+    print("Processing file ",day_file)
+    print("Writing to files {}, {}".format(write_signal_file, write_signals_file))
 
-
-    day_file = sys.argv[1]
+    df = pd.read_csv(day_file, sep=" ", usecols=[0,1,2,3,4,5], index_col = 0, header = None, names = ["time","mp","bidpx_","bidsz_","askpx_","asksz_",])
     
-    try:
-        write_spans = True if sys.argv[2] == "--spans" else False
-    except IndexError:
-        write_spans = False
-        
-    try:
-        chained_deals = True if sys.argv[3] == "--chained-deals" else False
-    except IndexError:
-        chained_deals = False
+    if not chained_deals:
+        df = find_all_signals(df, comission)
+    else:
+        df = find_signals(df, "Buy")
+        df = find_signals(df, "Sell")
+        df = filter_signals(df)
     
-    generate_signals_for_file(day_file, comission, write_spans, chained_deals)
+    df['signal'] = np.zeros(df.shape[0])
     
-
-__main__();
+    if write_spans:
+        df = make_spans(df, "Buy")    
+        df = make_spans(df, "Sell")
+        df['signal'][df["Buys"] == 1] = 1.0
+        df['signal'][df["Sells"] == 1] = -1.0
+        print("Saving spanned signals instead of point signals!")
+    else:
+        df['signal'][df["Buy"] == 1] = 1.0
+        df['signal'][df["Sell"] == 1] = -1.0
+    
+    _pnl, trade_count = pnl(df, chained_deals)
+    print("Max. theoret. PNL    : ", _pnl) #df.sum().absret_)
+    print("Max. theoret. return : ", _pnl / df["mp"].iloc[0])
+    print("Max. number of trades: ", trade_count)
+    print("Min Trading Amount   : ", min_trade_amount)
+    
+    # and write the signal 
+    if write_spans:
+        df = df[['signal', 'Buy', 'Sell', 'Buys', 'Sells']]
+    else:
+        df = df[['signal', 'Buy', 'Sell']]
+    signal_df = df['signal']
+    df.to_pickle(write_signals_file)
+    signal_df.to_csv(write_signal_file)
+    print("Results saved")
+    return df
