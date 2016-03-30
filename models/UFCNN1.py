@@ -1084,7 +1084,8 @@ if action == 'tradcom_simple':
     #for _d in generator(X, y):
     #    print(_d)
 
-    sgd = SGD(lr=0.0003, decay=1e-6, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
+    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)
 
 
     # load the model from disk if model name is given...
@@ -1092,7 +1093,7 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
     else:
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="categorical_crossentropy", sequence_length=500, optimizer='rmsprop' )
+                                   loss="categorical_crossentropy", sequence_length=500, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
@@ -1104,7 +1105,7 @@ if action == 'tradcom_simple':
     #                 batch_size=1)
 
     start_time = time.time()
-    epoch = 30
+    epoch = 5000
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
                       samples_per_epoch=training_count,
