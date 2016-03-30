@@ -37,7 +37,8 @@ def __main__():
         write_spans = False
         
     try:
-        chained_deals = True if sys.argv[0] == "--chained-deals" else False
+        #chained_deals = True if sys.argv[0] == "--chained-deals" else False
+        chained_deals = True if sys.argv[1] == "--chained-deals" else False
     except IndexError:
         chained_deals = False    
     
