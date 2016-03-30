@@ -21,7 +21,7 @@ from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, 
 from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
 from keras.layers.advanced_activations import ParametricSoftplus, SReLU
 from keras.callbacks import ModelCheckpoint, Callback
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 def draw_model(model):
     from IPython.display import SVG
@@ -164,25 +164,34 @@ def ufcnn_model_concat(sequence_length=5000,
     model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv4', input='relu3')
     model.add_node(Activation(activation), name='relu4', input='conv4')
     #########################################################
-    model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
-                     name='conv5',
-                     inputs=['relu2', 'relu4'],
-                     merge_mode='concat', concat_axis=-1)
+    model.add_node(Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init), name='conv5', input='relu4')
     model.add_node(Activation(activation), name='relu5', input='conv5')
     #########################################################
     model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
                      name='conv6',
-                     inputs=['relu1', 'relu5'],
+                     inputs=['relu3', 'relu5'],
                      merge_mode='concat', concat_axis=-1)
     model.add_node(Activation(activation), name='relu6', input='conv6')
     #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
+                     name='conv7',
+                     inputs=['relu2', 'relu6'],
+                     merge_mode='concat', concat_axis=-1)
+    model.add_node(Activation(activation), name='relu7', input='conv7')
+    #########################################################
+    model.add_node(Convolution1D(nb_filter=nb_filter,filter_length=filter_length, border_mode='same', init=init),
+                     name='conv8',
+                     inputs=['relu1', 'relu7'],
+                     merge_mode='concat', concat_axis=-1)
+    model.add_node(Activation(activation), name='relu8', input='conv8')
+    #########################################################
     if regression:
         #########################################################
-        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
-        model.add_output(name='output', input='conv7')
+        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv9', input='relu8')
+        model.add_output(name='output', input='conv9')
     else:
-        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv7', input='relu6')
-        model.add_node(Activation('sigmoid'), name='activation', input='conv7')
+        model.add_node(Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init), name='conv9', input='relu8')
+        model.add_node(Activation('softmax'), name='activation', input='conv9')
         model.add_output(name='output', input='activation')
     
     model.compile(optimizer=optimizer, loss={'output': loss})
@@ -545,8 +554,8 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
     #select by features_list
     Xdf = Xdf[features_list]
 
-    print("XDF After")
-    print(Xdf)  
+#     print("XDF After")
+#     print(Xdf)  
 
     Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
 
@@ -586,9 +595,13 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
 
     ydf['sell'] = ydf.apply(lambda row: (1 if row['signal'] < -0.9 else 0 ), axis=1)
     ydf['buy']  = ydf.apply(lambda row: (1 if row['signal'] > 0.9 else 0 ), axis=1)
-    ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
+    # ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] < 0.9 and row['sell'] <  0.9 else 0 ), axis=1)
 
     del ydf['signal']
+    
+    print("Buy signals:", ydf[ydf['buy'] !=0 ].shape[0])
+    print("Sell signals:", ydf[ydf['sell'] !=0 ].shape[0])
+    print("% of activity signals", float((ydf[ydf['buy'] !=0 ].shape[0] + ydf[ydf['sell'] !=0 ].shape[0])/ydf.shape[0]))
     
     if ret_type == 'stack':   
         y = np.zeros((ydf.shape[0]-sequence_length+1, sequence_length, output_dim))
@@ -735,7 +748,11 @@ def check_prediction(y, yp):
             delta += (y[0][i][j] - yp[0][i][j]) * (y[0][i][j] - yp[0][i][j])
     
         total_error += delta
-
+        
+        if np.any(y[0][i] != 0):     # some debug output, comment if not needed!
+            print("Actual: ", y[0][i])
+            print("Predicted: ", yp[0][i])
+            
         if np.argmax(y[0][i]) == np.argmax(yp[0][i]):
             correct_class += 1
 
@@ -820,6 +837,49 @@ def get_tracking_data (sequence_length=5000, count=2000, D=10, delta=0.3, omega_
 
     return (X,y)
  
+    
+def get_simulation(write_spans = True):
+    """
+    Make trading competition-like input and output data from the cosine function
+    """
+    from signals import find_all_signals, make_spans, set_positions
+    from datetime import date
+    
+    df = pd.DataFrame(data={"askpx_": np.round(gen_cosine_amp(k=0, period=10, amp=20)[:, 0, 0]+201),
+                                "bidpx_": np.round(gen_cosine_amp(k=0, period=10, amp=20)[:, 0, 0]+200)})
+    df = find_all_signals(df) 
+    df = make_spans(df, 'Buy')
+    df = make_spans(df, 'Sell')
+    
+    Xdf = df[["askpx_", "bidpx_"]]
+    df['buy'] = df['Buy'] if not write_spans else df['Buys']
+    df['sell'] = df['Sell'] if not write_spans else df['Sells']
+    ydf = df[["buy", "sell"]]
+    
+    Xdf['Milliseconds'] = Xdf.index
+    Xdf['Date'] = pd.to_datetime(date.today())
+    Xdf = Xdf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
+    #print(Xdf.index[0:100])
+    
+    ydf['Milliseconds'] = ydf.index
+    ydf['Date'] = pd.to_datetime(date.today())
+    ydf = ydf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
+    #print(ydf.index[0:100])
+    
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[["askpx_", "bidpx_"], ])
+    
+    ydf['hold'] = ydf.apply(lambda row: (1 if row['buy'] == 0 and row['sell'] == 0 else 0 ), axis=1)
+    
+    print("Buy signals:", ydf[ydf['buy'] !=0 ].shape[0])
+    print("Sell signals:", ydf[ydf['sell'] !=0 ].shape[0])
+    print("% of activity signals", float(ydf[ydf['buy'] !=0 ].shape[0] + ydf[ydf['sell'] !=0 ].shape[0])/float(ydf.shape[0]))
+    
+    print(Xdf.shape, Xdf.columns)
+    print(ydf.shape, ydf.columns)    
+    
+    return (Xdf,ydf,mean,std)
+    
+    
         
 
 #########################################################
@@ -919,17 +979,20 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
+    simulation = True # Use True for simulated cosine data, False - for data from files
+    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    testing_count = 1
+    
+    features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
-    training_count = 2 # Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    testing_count = 2
-
-    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
-    print ("File list ",file_list)
-
-    features_list = list(range(1,33))
-
-    (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
+    if not simulation:
+        file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
+        print ("File list ",file_list)
+        (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
     ## I am just wondering if mean and std need to be sorted before applying to testing data - I think it does - TODO - check this
+    else:
+        print("Using simulated data for training...")
+        (X, y, mean, std) = get_simulation()
 
     print("X shape: ", X.shape)
     print(X)
@@ -951,15 +1014,16 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
     else:
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-           loss="categorical_crossentropy", sequence_length=500, optimizer=sgd )
+                                   loss="categorical_crossentropy", sequence_length=500, optimizer='rmsprop' )
+        
+    print_nodes_shapes(model)
 
-
-    #draw_model(model)
-    #history = model.fit({'input': X, 'output': y},
-    #                  verbose=2,
-    #                  nb_epoch=5,
-    #                  shuffle=False,
-    #                  batch_size=1)
+    draw_model(model)
+    history = model.fit({'input': X, 'output': y},
+                     verbose=2,
+                     nb_epoch=5,
+                     shuffle=False,
+                     batch_size=1)
 
     start_time = time.time()
     epoch = 30
@@ -967,17 +1031,21 @@ if action == 'tradcom_simple':
                       nb_worker=1,
                       samples_per_epoch=2,
                       verbose=1,
-                      nb_epoch=epoch)
+                      nb_epoch=epoch, 
+                      show_accuracy=True)
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
-    save_neuralnet (model, "ufcnn_concat")
+    save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
 
+    if not simulation:
+        # and get the files for testing
+        file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+testing_count]
 
-    # and get the files for testing
-    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+testing_count]
-
-    (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list, mean=mean, std=std, training_count=training_count)
+        (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list, mean=mean, std=std, training_count=training_count)
+    else:
+        print("Using simulated data for training...")
+        (X_pred, y_pred, mean_, std_) = get_simulation()
 
     i=1  
     for date_idx in X_pred.index.get_level_values(0).unique():
