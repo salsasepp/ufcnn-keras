@@ -646,8 +646,6 @@ def generator(X, y):
             y_array = y.loc[date_idx].values
             X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
             y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-            #print("Yielding samples... ", c)
-            c += 1
             yield {'input': X_samples, 'output': y_samples}
 
 
@@ -731,7 +729,8 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
 
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
-def check_prediction(y, yp):
+    
+def check_prediction(Xdf, y, yp, mean, std):
     """ Check the predicted classes and print results
     """
     ## MSE for testing
@@ -739,6 +738,7 @@ def check_prediction(y, yp):
     correct_class= 0
 
     y_pred_class = np.zeros((y.shape[2],))
+    y_corr_pred_class = np.zeros((y.shape[2],))
     y_class      = np.zeros((y.shape[2],))
     a=['Sell','Buy','Hold']
 
@@ -749,12 +749,13 @@ def check_prediction(y, yp):
     
         total_error += delta
         
-        if np.any(y[0][i] != 0):     # some debug output, comment if not needed!
-            print("Actual: ", y[0][i])
-            print("Predicted: ", yp[0][i])
+        #if np.any(y[0][i] != 0):     # some debug output, comment if not needed!
+        #    print("Actual: ", y[0][i])
+        #    print("Predicted: ", yp[0][i])
             
         if np.argmax(y[0][i]) == np.argmax(yp[0][i]):
             correct_class += 1
+            y_corr_pred_class[np.argmax(yp[0][i])] += 1.
 
         y_pred_class[np.argmax(yp[0][i])] += 1.
         y_class[np.argmax(y[0][i])] += 1.
@@ -762,10 +763,12 @@ def check_prediction(y, yp):
     print()
     print("Total MSE Error: ",  total_error / y.shape[1])
     print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
-    """
+    
     for i in range(y.shape[2]):
-        print("%4s: Predicted  %6d/%7d" %(a[i], y_pred_class[i], y_class[i]))
+        print("%4s: Correctly Predicted / Predicted / Total:    %6d/%6d/%7d" %(a[i], y_corr_pred_class[i], y_pred_class[i], y_class[i]))
 
+    Xdf = Xdf * std
+    Xdf = Xdf + mean
 
     yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
     #print(yp_p)
@@ -775,7 +778,7 @@ def check_prediction(y, yp):
     Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
 
     Xdf2['signal'] = 0.
-    #print(Xdf2)
+    print(Xdf2)
 
 
     # store everything in signal
@@ -788,19 +791,23 @@ def check_prediction(y, yp):
     position = 0.
     last_row = None
     nr_trades = 0
+    trade_pnl = 0.
 
     for (index, row) in Xdf2.iterrows():
         (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.02)
         pnl += pnl_
+         
         last_row = row
         if position < -0.1 or position > 0.1:
             invested_tics +=1
         if is_trade:
             nr_trades += 1
+            trade_pnl = 0.
+        trade_pnl += pnl_
 
     print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
     print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
-    """
+    
 ### END
 
 
@@ -1058,17 +1065,19 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
-    simulation = True # Use True for simulated cosine data, False - for data from files
-    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    simulation = False # Use True for simulated cosine data, False - for data from files
+    training_count = 1 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     testing_count = 1
     
-    features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
+    #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
+        features_list = list(range(1,33))
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("File list ",file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
     else:
+        features_list = list(range(0,2)) 
         print("Using simulated data for training...")
         (X, y, mean, std) = get_simulation()
 
@@ -1105,7 +1114,7 @@ if action == 'tradcom_simple':
     #                 batch_size=1)
 
     start_time = time.time()
-    epoch = 5000
+    epoch = 5
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
                       samples_per_epoch=training_count,
@@ -1139,5 +1148,5 @@ if action == 'tradcom_simple':
         print("Predicting: day ",i ,": ", date_idx)
         predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
 
-        check_prediction(y_samples, predicted_output['output'])
+        check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
         i += 1
