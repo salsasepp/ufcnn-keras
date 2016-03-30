@@ -762,9 +762,88 @@ def check_prediction(y, yp):
     print()
     print("Total MSE Error: ",  total_error / y.shape[1])
     print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
+    """
     for i in range(y.shape[2]):
         print("%4s: Predicted  %6d/%7d" %(a[i], y_pred_class[i], y_class[i]))
+
+
+    yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
+    #print(yp_p)
+
+    ydf2 = pd.DataFrame(yp_p, columns=['sell','buy','hold'])
+    Xdf2 = Xdf.reset_index(drop=True)
+    Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
+
+    Xdf2['signal'] = 0.
+    #print(Xdf2)
+
+
+    # store everything in signal
+    # -1 for short, 1 for long...
+    Xdf2['signal'] = Xdf2.apply(lambda row: (1  if row['buy']  > row['hold'] and row['buy']  > row['sell'] else 0 ), axis=1)
+    Xdf2['signal'] = Xdf2.apply(lambda row: (-1 if row['sell'] > row['hold'] and row['sell'] > row['buy'] else row['signal'] ), axis=1)
+
+    invested_tics = 0
+    pnl = 0.
+    position = 0.
+    last_row = None
+    nr_trades = 0
+
+    for (index, row) in Xdf2.iterrows():
+        (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.02)
+        pnl += pnl_
+        last_row = row
+        if position < -0.1 or position > 0.1:
+            invested_tics +=1
+        if is_trade:
+            nr_trades += 1
+
+    print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
+    print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
+    """
 ### END
+
+
+def calculate_pnl(position, row, next_row, fee_per_roundtrip=0.):
+    if row is None:
+        return (0.,0., False)
+
+    old_position = position
+
+    pnl = 0.
+
+    if position < -0.1:
+        pnl = position * (next_row[4] - row[4]) # ASK
+
+    if position >  0.1:
+        pnl = position * (next_row[2] - row[2]) # BID
+
+
+    signal = row['signal']
+
+    #  if we are short and need to go long...
+    if position < -0.1 and signal > 0.1:
+        position = 0.
+
+    #  if we are long and need to go short...
+    if position > 0.1 and signal < -0.1:
+        position = 0.
+
+    trade = False
+    if position == 0. and abs(signal) > 0.1:
+        position = signal
+        if position < -0.1:
+            pnl = position * (next_row[4] - row[2]) # ASK
+
+        if position >  0.1:
+            pnl = position * (next_row[2] - row[4]) # BID
+        pnl -= fee_per_roundtrip
+        trade = True
+
+    #print ("SIGNAL:",signal, ", old_position: ", old_position, " position:", position, ", pnl: ",pnl, "Bid: ",row[2],next_row[2],", ASK ",row[4], next_row[4] )
+    return (pnl, position, trade)
+    ## End calculate_pnl
+
 
 
 def get_tracking_data (sequence_length=5000, count=2000, D=10, delta=0.3, omega_w=0.005, omega_ny=0.005):
@@ -989,7 +1068,6 @@ if action == 'tradcom_simple':
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("File list ",file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
-    ## I am just wondering if mean and std need to be sorted before applying to testing data - I think it does - TODO - check this
     else:
         print("Using simulated data for training...")
         (X, y, mean, std) = get_simulation()
@@ -1018,18 +1096,18 @@ if action == 'tradcom_simple':
         
     print_nodes_shapes(model)
 
-    draw_model(model)
-    history = model.fit({'input': X, 'output': y},
-                     verbose=2,
-                     nb_epoch=5,
-                     shuffle=False,
-                     batch_size=1)
+    #draw_model(model)
+    #history = model.fit({'input': X, 'output': y},
+    #                 verbose=2,
+    #                 nb_epoch=5,
+    #                 shuffle=False,
+    #                 batch_size=1)
 
     start_time = time.time()
     epoch = 30
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
-                      samples_per_epoch=2,
+                      samples_per_epoch=training_count,
                       verbose=1,
                       nb_epoch=epoch, 
                       show_accuracy=True)
