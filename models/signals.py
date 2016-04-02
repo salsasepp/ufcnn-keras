@@ -87,26 +87,26 @@ def next_signal(iterator, df=None, sig_type=None, outer_idx=None, outer_row=None
         # print(idx, row)
         if row['Buy'] or row['Sell']:
             inner_sig_type = 'Buy' if row['Buy'] else 'Sell'
-            print("Inner signal: ", idx, inner_sig_type)
+            # print("Inner signal: ", idx, inner_sig_type)
             if sig_type:
-                print("Outer signal: ", outer_idx, sig_type)
+                # print("Outer signal: ", outer_idx, sig_type)
                 if inner_sig_type == sig_type:
-                    print("Compare {} bid: {} ask: {} with {} bid: {} ask: {}".
-                          format(best_idx, df["bidpx_"][best_idx], df["askpx_"][best_idx], idx, df["bidpx_"][idx], df["askpx_"][idx]))
+                    # print("Compare {} bid: {} ask: {} with {} bid: {} ask: {}".
+                    #      format(best_idx, df["bidpx_"][best_idx], df["askpx_"][best_idx], idx, df["bidpx_"][idx], df["askpx_"][idx]))
                     if sig_type == 'Buy' and df["askpx_"][idx] < df["askpx_"][best_idx]:
-                        print("Better {} candidate at {} with price {}".format(sig_type, idx, df["askpx_"][idx]))
+                        # print("Better {} candidate at {} with price {}".format(sig_type, idx, df["askpx_"][idx]))
                         best_idx, best_row = idx, row
                         #return idx, idx, row, sig_type
                     if sig_type == 'Sell' and df["bidpx_"][idx] > df["bidpx_"][best_idx]:
-                        print("Better {} candidate at {} with price {}".format(sig_type, idx, df["bidpx_"][idx]))
+                        # print("Better {} candidate at {} with price {}".format(sig_type, idx, df["bidpx_"][idx]))
                         best_idx, best_row = idx, row
                         #return idx, idx, row, sig_type
                     prev_idx = idx
                 else:
-                    print("Best {} candidate at {}, break...".format(sig_type, outer_idx))
+                    # print("Best {} candidate at {}, break...".format(sig_type, outer_idx))
                     return best_idx, prev_idx, best_row, sig_type
             else:
-                print("Recursion")
+                # print("Recursion")
                 return next_signal(iterator, df, inner_sig_type, idx, row)
 
         
@@ -247,7 +247,7 @@ def make_spans(df, sig_type):
     for idx in df[sig_type][df[sig_type] == 1].index:
         signal_val = df.loc[idx]
         iterator = reversed_df.loc[idx:].iterrows()
-        _d = print("Outer loop:", idx, signal_val["askpx_"]) if sig_type == "Buy" else print("Outer loop:", idx, signal_val["bidpx_"])
+        #_d = print("Outer loop:", idx, signal_val["askpx_"]) if sig_type == "Buy" else print("Outer loop:", idx, signal_val["bidpx_"])
         for i, val in iterator:
             # _d = print("Inner loop:", i, val["askpx_"]) if sig_type == "Buy" else print("Inner loop:", i, val["bidpx_"])
             if sig_type == "Buy":

@@ -557,7 +557,8 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
 #     print("XDF After")
 #     print(Xdf)  
 
-    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
+    # Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[0, 1], ], mean=mean, std=std)
 
     # if nothing from above, the use the calculated data
 
@@ -740,7 +741,8 @@ def check_prediction(Xdf, y, yp, mean, std):
     y_pred_class = np.zeros((y.shape[2],))
     y_corr_pred_class = np.zeros((y.shape[2],))
     y_class      = np.zeros((y.shape[2],))
-    a=['Sell','Buy','Hold']
+    y_labels = np.zeros((y.shape[1], y.shape[2]))
+    a=['Buy','Sell','Hold']
 
     for i in range (y.shape[1]):
         delta = 0.
@@ -759,6 +761,7 @@ def check_prediction(Xdf, y, yp, mean, std):
 
         y_pred_class[np.argmax(yp[0][i])] += 1.
         y_class[np.argmax(y[0][i])] += 1.
+        y_labels[i][np.argmax(yp[0][i])] = 1
 
     print()
     print("Total MSE Error: ",  total_error / y.shape[1])
@@ -773,12 +776,14 @@ def check_prediction(Xdf, y, yp, mean, std):
     yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
     #print(yp_p)
 
-    ydf2 = pd.DataFrame(yp_p, columns=['sell','buy','hold'])
+    ydf2 = pd.DataFrame(yp_p, columns=['buy','sell','hold'])
     Xdf2 = Xdf.reset_index(drop=True)
     Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
 
     Xdf2['signal'] = 0.
     print(Xdf2)
+
+    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['buy','sell','hold'], index=Xdf.index)], axis=1)
 
 
     # store everything in signal
@@ -794,7 +799,7 @@ def check_prediction(Xdf, y, yp, mean, std):
     trade_pnl = 0.
 
     for (index, row) in Xdf2.iterrows():
-        (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.02)
+        (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.0)
         pnl += pnl_
          
         last_row = row
@@ -805,10 +810,50 @@ def check_prediction(Xdf, y, yp, mean, std):
             trade_pnl = 0.
         trade_pnl += pnl_
 
+    sig_pnl, sig_trades = get_pnl(xy_df)
+    print("Signals PnL: {}, # of trades: {}".format(sig_pnl, sig_trades))
+
     print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
     print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
     
 ### END
+
+
+def get_pnl(df, max_position=1, comission=0):
+    deals = []
+    pnl = 0
+    position = 0
+    df_with_signals = df[(df['sell'] != 0) | (df['buy'] != 0)]
+
+    for idx, row in df_with_signals.iterrows():
+        if row['buy'] == 1 and position < max_position:
+            print(row)
+            current_trade = -row['buy'] * row["askpx_"]
+            position += 1
+            pnl = pnl + current_trade - comission
+            deals.append(current_trade)
+            print("Running PnL: {}, position: {}".format(pnl, position))
+        elif row['sell'] == 1 and position > -max_position:
+            print(row)
+            current_trade = row['sell'] * row["bidpx_"]
+            position -= 1
+            pnl = pnl + current_trade - comission
+            deals.append(current_trade)
+            print("Running PnL: {}, position: {}".format(pnl, position))
+
+    if position == 1:
+        day_closing_trade = df.iloc[-1]["bidpx_"]
+        pnl = pnl + day_closing_trade - comission
+        deals.append(day_closing_trade)
+        print("Close last hanging deal on the end of the day, PnL: {}, position: {}".format(pnl, position))
+    elif position == -1:
+        day_closing_trade = -df.iloc[-1]["askpx_"]
+        pnl = pnl + day_closing_trade - comission
+        deals.append(day_closing_trade)
+        print("Close last hanging deal on the end of the day, PnL: {}, position: {}".format(pnl, position))
+
+    print("Check PnL: {} vs {}".format(pnl, np.sum(deals)))
+    return pnl, len(deals)
 
 
 def calculate_pnl(position, row, next_row, fee_per_roundtrip=0.):
@@ -928,7 +973,7 @@ def get_simulation(write_spans = True):
     """
     Make trading competition-like input and output data from the cosine function
     """
-    from signals import find_all_signals, make_spans, set_positions
+    from signals import find_all_signals, make_spans, set_positions, pnl
     from datetime import date
     
     df = pd.DataFrame(data={"askpx_": np.round(gen_cosine_amp(k=0, period=10, amp=20)[:, 0, 0]+201),
@@ -936,6 +981,7 @@ def get_simulation(write_spans = True):
     df = find_all_signals(df) 
     df = make_spans(df, 'Buy')
     df = make_spans(df, 'Sell')
+    print("Simulation PnL", pnl(df))
     
     Xdf = df[["askpx_", "bidpx_"]]
     df['buy'] = df['Buy'] if not write_spans else df['Buys']
@@ -1065,30 +1111,30 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
-    simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 1 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    simulation = True # Use True for simulated cosine data, False - for data from files
+    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     testing_count = 1
     
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
-        features_list = list(range(1,33))
+        features_list = list(range(2,6))
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("File list ",file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
     else:
-        features_list = list(range(0,2)) 
+        features_list = list(range(0,2))
         print("Using simulated data for training...")
         (X, y, mean, std) = get_simulation()
-
-    print("X shape: ", X.shape)
-    print(X)
-    print("Y shape: ", y.shape)
-
-    print("Mean")
-    print(mean)
-    print("Std")
-    print(std)
+    #
+    # print("X shape: ", X.shape)
+    # print(X)
+    # print("Y shape: ", y.shape)
+    #
+    # print("Mean")
+    # print(mean)
+    # print("Std")
+    # print(std)
    
     #for _d in generator(X, y):
     #    print(_d)
@@ -1113,18 +1159,18 @@ if action == 'tradcom_simple':
     #                 shuffle=False,
     #                 batch_size=1)
 
-    start_time = time.time()
-    epoch = 5
-    history = model.fit_generator(generator(X, y),
-                      nb_worker=1,
-                      samples_per_epoch=training_count,
-                      verbose=1,
-                      nb_epoch=epoch, 
-                      show_accuracy=True)
-    print(history.history)
-    print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
-
-    save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
+    # start_time = time.time()
+    # epoch = 50
+    # history = model.fit_generator(generator(X, y),
+    #                   nb_worker=1,
+    #                   samples_per_epoch=training_count,
+    #                   verbose=1,
+    #                   nb_epoch=epoch,
+    #                   show_accuracy=True)
+    # print(history.history)
+    # print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
+    #
+    # save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
 
     if not simulation:
         # and get the files for testing
@@ -1135,6 +1181,9 @@ if action == 'tradcom_simple':
         print("Using simulated data for training...")
         (X_pred, y_pred, mean_, std_) = get_simulation()
 
+    print(X_pred.iloc[0:200])
+    print(y_pred.iloc[0:200])
+
     i=1  
     for date_idx in X_pred.index.get_level_values(0).unique():
 
@@ -1142,6 +1191,7 @@ if action == 'tradcom_simple':
         y_array = y_pred.loc[date_idx].values
         X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
         y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+        print(y_samples[0, 0:200, :])
 
         inp = {'input': X_samples, 'output': y_samples}
 
