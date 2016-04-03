@@ -784,7 +784,7 @@ def check_prediction(Xdf, y, yp, mean, std):
     print(Xdf2)
 
     xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['buy','sell','hold'], index=Xdf.index)], axis=1)
-
+    xy_df = xy_df.rename(columns={2: "bidpx_", 3: "bidsz_", 4: "askpx_", 5: "asksz_"})
 
     # store everything in signal
     # -1 for short, 1 for long...
