@@ -456,7 +456,15 @@ def get_tradcom_normalization(filename, mean=None, std=None):
     return(mean, std)
 
 
-def prepare_tradcom_classification(training=True, ret_type='df', sequence_length=5000, features_list=[1,2,3,4], output_dim=3, file_list=None, mean=None, std=None, training_count=None):
+def prepare_tradcom_classification(training=True,
+                                   ret_type='df',
+                                   sequence_length=5000,
+                                   features_list=[1,2,3,4],
+                                   output_dim=3,
+                                   file_list=None,
+                                   mean=None,
+                                   std=None,
+                                   training_count=None):
     """
     prepare the datasets for the trading competition. training determines which datasets will be read
     returns: X and y: Pandas.DataFrames or np-Arrays storing the X - and y values for the fitting. 
@@ -557,8 +565,7 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
 #     print("XDF After")
 #     print(Xdf)  
 
-    # Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
-    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[0, 1], ], mean=mean, std=std)
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
 
     # if nothing from above, the use the calculated data
 
@@ -784,6 +791,7 @@ def check_prediction(Xdf, y, yp, mean, std):
     print(Xdf2)
 
     xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['buy','sell','hold'], index=Xdf.index)], axis=1)
+    xy_df = xy_df.rename(columns={2: "bidpx_", 3: "bidsz_", 4: "askpx_", 5: "asksz_"})
 
 
     # store everything in signal
@@ -1111,25 +1119,44 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
-    simulation = True # Use True for simulated cosine data, False - for data from files
-    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    testing_count = 1
+    simulation = False # Use True for simulated cosine data, False - for data from files
+    training_count = 10 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 2
     
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
         features_list = list(range(2,6))
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
-        print ("File list ",file_list)
-        (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
+        print ("Training file list ", file_list)
+        (X, y, mean, std) = prepare_tradcom_classification(training=True,
+                                                           ret_type='df',
+                                                           sequence_length=500,
+                                                           features_list=features_list,
+                                                           output_dim=3,
+                                                           file_list=file_list)
+
+        file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+validation_count]
+        print ("Validation file list ", file_list)
+        (X_val, y_val, mean_, std_) = prepare_tradcom_classification(training=True,
+                                                                   ret_type='df',
+                                                                   sequence_length=500,
+                                                                   features_list=features_list,
+                                                                   output_dim=3,
+                                                                   file_list=file_list,
+                                                                   mean=mean,
+                                                                   std=std,
+                                                                   training_count=training_count)
+
     else:
         features_list = list(range(0,2))
         print("Using simulated data for training...")
         (X, y, mean, std) = get_simulation()
     #
-    # print("X shape: ", X.shape)
+    print("X shape: ", X.shape)
     # print(X)
-    # print("Y shape: ", y.shape)
+    print("Y shape: ", y.shape)
     #
     # print("Mean")
     # print(mean)
@@ -1159,24 +1186,34 @@ if action == 'tradcom_simple':
     #                 shuffle=False,
     #                 batch_size=1)
 
-    # start_time = time.time()
-    # epoch = 50
-    # history = model.fit_generator(generator(X, y),
-    #                   nb_worker=1,
-    #                   samples_per_epoch=training_count,
-    #                   verbose=1,
-    #                   nb_epoch=epoch,
-    #                   show_accuracy=True)
-    # print(history.history)
-    # print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
-    #
-    # save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
+    start_time = time.time()
+    epoch = 700
+    history = model.fit_generator(generator(X, y),
+                      nb_worker=1,
+                      samples_per_epoch=training_count,
+                      verbose=1,
+                      nb_epoch=epoch,
+                      show_accuracy=True,
+                      validation_data=generator(X_val, y_val),
+                      nb_val_samples=2)
+    print(history.history)
+    print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
+
+    save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
 
     if not simulation:
         # and get the files for testing
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count+testing_count]
 
-        (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list, mean=mean, std=std, training_count=training_count)
+        (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False,
+                                                                       ret_type='df',
+                                                                       sequence_length=500,
+                                                                       features_list=features_list,
+                                                                       output_dim=3,
+                                                                       file_list=file_list,
+                                                                       mean=mean,
+                                                                       std=std,
+                                                                       training_count=training_count)
     else:
         print("Using simulated data for training...")
         (X_pred, y_pred, mean_, std_) = get_simulation()
