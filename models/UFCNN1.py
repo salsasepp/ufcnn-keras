@@ -566,6 +566,7 @@ def prepare_tradcom_classification(training=True,
 #     print(Xdf)  
 
     Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
+    # Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[0, 1], ], mean=mean, std=std)
 
     # if nothing from above, the use the calculated data
 
@@ -1127,7 +1128,7 @@ if action == 'tradcom_simple':
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
-        features_list = list(range(2,6))
+        features_list = list(range(2,6)) # to run with Bid/Ask price/vol only
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("Training file list ", file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True,
