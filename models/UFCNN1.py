@@ -557,8 +557,8 @@ def prepare_tradcom_classification(training=True, ret_type='df', sequence_length
 #     print("XDF After")
 #     print(Xdf)  
 
-    # Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
-    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[0, 1], ], mean=mean, std=std)
+    Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[2, 4], [3, 5]], mean=mean, std=std)
+    # Xdf, mean, std = standardize_inputs(Xdf, colgroups=[[0, 1], ], mean=mean, std=std)
 
     # if nothing from above, the use the calculated data
 
@@ -1118,7 +1118,7 @@ if action == 'tradcom_simple':
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
-        features_list = list(range(2,6))
+        features_list = list(range(2,6)) # to run with Bid/Ask price/vol only
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("File list ",file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True, ret_type='df', sequence_length=500, features_list=features_list, output_dim=3, file_list=file_list)
@@ -1159,18 +1159,18 @@ if action == 'tradcom_simple':
     #                 shuffle=False,
     #                 batch_size=1)
 
-    # start_time = time.time()
-    # epoch = 50
-    # history = model.fit_generator(generator(X, y),
-    #                   nb_worker=1,
-    #                   samples_per_epoch=training_count,
-    #                   verbose=1,
-    #                   nb_epoch=epoch,
-    #                   show_accuracy=True)
-    # print(history.history)
-    # print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
-    #
-    # save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
+    start_time = time.time()
+    epoch = 50
+    history = model.fit_generator(generator(X, y),
+                      nb_worker=1,
+                      samples_per_epoch=training_count,
+                      verbose=1,
+                      nb_epoch=epoch,
+                      show_accuracy=True)
+    print(history.history)
+    print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
+    
+    save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
 
     if not simulation:
         # and get the files for testing
