@@ -1121,19 +1121,22 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 10 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    training_count = 20 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     validation_count = 2
-    testing_count = 2
-    
+    testing_count = 8
+    sequence_length = 5000
+
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
     if not simulation:
-        features_list = list(range(2,6)) # to run with Bid/Ask price/vol only
+        features_list = list(range(2,6))   ## to run with Bid/Ask price/vol only
+        features_list = list(range(1,33))  ## FULL
+
         file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
         print ("Training file list ", file_list)
         (X, y, mean, std) = prepare_tradcom_classification(training=True,
                                                            ret_type='df',
-                                                           sequence_length=500,
+                                                           sequence_length=sequence_length,
                                                            features_list=features_list,
                                                            output_dim=3,
                                                            file_list=file_list)
@@ -1142,7 +1145,7 @@ if action == 'tradcom_simple':
         print ("Validation file list ", file_list)
         (X_val, y_val, mean_, std_) = prepare_tradcom_classification(training=True,
                                                                    ret_type='df',
-                                                                   sequence_length=500,
+                                                                   sequence_length=sequence_length,
                                                                    features_list=features_list,
                                                                    output_dim=3,
                                                                    file_list=file_list,
@@ -1168,7 +1171,8 @@ if action == 'tradcom_simple':
     #    print(_d)
 
     sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
-    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)
+    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
+    rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
 
 
     # load the model from disk if model name is given...
@@ -1176,7 +1180,7 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
     else:
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="categorical_crossentropy", sequence_length=500, optimizer=rmsprop )
+                                   loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
@@ -1188,7 +1192,7 @@ if action == 'tradcom_simple':
     #                 batch_size=1)
 
     start_time = time.time()
-    epoch = 700
+    epoch = 400
     history = model.fit_generator(generator(X, y),
                       nb_worker=1,
                       samples_per_epoch=training_count,
@@ -1196,7 +1200,7 @@ if action == 'tradcom_simple':
                       nb_epoch=epoch,
                       show_accuracy=True,
                       validation_data=generator(X_val, y_val),
-                      nb_val_samples=2)
+                      nb_val_samples=validation_count)
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
@@ -1208,7 +1212,7 @@ if action == 'tradcom_simple':
 
         (X_pred, y_pred, mean_, std_) = prepare_tradcom_classification(training=False,
                                                                        ret_type='df',
-                                                                       sequence_length=500,
+                                                                       sequence_length=sequence_length,
                                                                        features_list=features_list,
                                                                        output_dim=3,
                                                                        file_list=file_list,
