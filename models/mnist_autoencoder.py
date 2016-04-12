@@ -15,7 +15,7 @@ from keras.layers.convolutional_transpose import Convolution2D_Transpose
    An autoencoder with 2D Convolution-Transpose layer in TF
 """
 
-batch_size = 128
+batch_size = 100 # total number of elements in the X_ and Y_ (60000 train, 10000 test) arrays must be a multiple of batch_size!
 nb_classes = 10
 nb_epoch = 12
 
