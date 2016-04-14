@@ -44,7 +44,7 @@ class Convolution2D_Transpose(Layer):
 
 
 
-          padding: VALID|SAME
+          padding: valid|same
 
           input_dim, input_length ... Keras input parameters
 
@@ -53,27 +53,34 @@ class Convolution2D_Transpose(Layer):
         def conv_transpose_out_length(input_size, filter_size, border_mode, stride):
             if input_size is None:
                 return None
-            if border_mode == 'VALID':
+            if border_mode == 'valid':
                 output_size = (input_size - 1) * stride + filter_size
-            elif border_mode == 'SAME':
+            elif border_mode == 'same':
                 output_size = input_size
             return output_size
+          
+         TODO for Serialization:
+            The config dictionary returned by your layer's get_config probably included the class name as name. 
+            Just remove that name entry from get_config.
+
+            If your layer requires more to be instantiated than just calling it with config as kwargs: implement a from_config classmethod. 
+            For examples of complex from_config methods, see the Lambda layer or Merge layer.
     """
 
     input_ndim = 4
 
     def __init__(self,
                  init='glorot_uniform', activation='linear', weights=None,
-                 padding='VALID', strides=[1,1,1,1], deconv_shape=[], W_shape = [],b_shape=[],
+                 padding='valid', strides=[1,1,1,1], deconv_shape=[], W_shape = [],b_shape=[],
                  W_regularizer=None, b_regularizer=None, activity_regularizer=None,
                  W_constraint=None, b_constraint=None, input_dim=None, input_length=None, **kwargs):
 
-        if padding not in {'VALID', 'SAME'}:
+        if padding not in {'valid','same'}:
             raise Exception('Invalid border mode for Convolution2D:', padding)
         self.deconv_shape = deconv_shape
         self.init = initializations.get(init)
         self.activation = activations.get(activation)
-        assert padding in {'VALID', 'SAME'}, 'border_mode must be in {VALID, SAME}'
+        assert padding in {'valid', 'same'}, 'border_mode must be in {valid, same}'
         self.padding = padding
         self.strides = strides
 
@@ -157,24 +164,23 @@ class Convolution2D_Transpose(Layer):
 
 
     @property
-    def output_shape(self, train = False):
+    def get_output_shape(self, input_shape):
         return self.deconv_shape
 
-    def get_output_OLD(self, train=False):
-        X = self.get_input(train)
-        X = K.permute_dimensions(X, (0, 2, 3, 1))
-        conv_out = tf.nn.conv2d_transpose(X, self.W, strides=self.strides,
-                                          padding=self.padding,
-                                          output_shape=self.deconv_shape)
-
-        output = conv_out + K.reshape(self.b, (1, 1, 1, self.W_shape[2]))
-        return K.permute_dimensions(output, (0, 3, 1, 2))
+    #def get_output_OLD(self, train=False):
+    #    X = self.get_input(train)
+    #    X = K.permute_dimensions(X, (0, 2, 3, 1))
+    #    conv_out = tf.nn.conv2d_transpose(X, self.W, strides=self.strides,
+    #                                      padding=self.padding,
+    #                                      output_shape=self.deconv_shape)
+    #    output = conv_out + K.reshape(self.b, (1, 1, 1, self.W_shape[2]))
+    #    return K.permute_dimensions(output, (0, 3, 1, 2))
 
     def call(self, X,  mask=None):
         #X = self.get_input(train)
         X = K.permute_dimensions(X, (0, 2, 3, 1))
         conv_out = tf.nn.conv2d_transpose(X, self.W, strides=self.strides,
-                                          padding=self.padding,
+                                          padding=self.padding.upper(),
                                           output_shape=self.deconv_shape)
 
         output = conv_out + K.reshape(self.b, (1, 1, 1, self.W_shape[2]))
@@ -190,7 +196,10 @@ class Convolution2D_Transpose(Layer):
                   'b_regularizer': self.b_regularizer.get_config() if self.b_regularizer else None,
                   'activity_regularizer': self.activity_regularizer.get_config() if self.activity_regularizer else None,
                   'W_constraint': self.W_constraint.get_config() if self.W_constraint else None,
-                  'b_constraint': self.b_constraint.get_config() if self.b_constraint else None}
+                  'b_constraint': self.b_constraint.get_config() if self.b_constraint else None,
+                  'W_shape': self.W_shape,
+                  'b_shape': self.b_shape,
+                  'deconv_shape': self.deconv_shape }
         base_config = super(Convolution2D_Transpose, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
