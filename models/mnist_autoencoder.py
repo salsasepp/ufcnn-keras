@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy as np
-np.random.seed(1337)  # for reproducibility
+import matplotlib.pyplot as plt 
 
 from keras.datasets import mnist
 from keras.models import Sequential
@@ -10,14 +10,20 @@ from keras.utils import np_utils
 
 from keras.layers.convolutional_transpose import Convolution2D_Transpose
 
+
 """
    modified from https://github.com/loliverhennigh/All-Convnet-Autoencoder-Example 
    An autoencoder with 2D Convolution-Transpose layer in TF
 """
+def save_neuralnet (model, model_name):
+
+    json_string = model.to_json()
+    open(model_name + '_architecture.json', 'w').write(json_string)
+    model.save_weights(model_name + '_weights.h5', overwrite=True)
+
 
 batch_size = 100 # total number of elements in the X_ and Y_ (60000 train, 10000 test) arrays must be a multiple of batch_size!
-nb_classes = 10
-nb_epoch = 12
+nb_epoch = 100
 
 # input image dimensions
 img_rows, img_cols = 28, 28
@@ -72,13 +78,31 @@ model.add(Activation('relu'))
 model.add(Convolution2D(2, 1, 1, border_mode = 'valid'))
 model.add(Activation('relu'))
 
+model.add(MaxPooling2D(pool_size=(2, 2),strides=None, border_mode='valid'))
+
+model.add(Dropout(0.2))
+
 # input  input 14 * 14 * 2, output 28 * 28 * 2 ?
 W_shape = [2, 2, 2, 2] # (self.nb_filter, input_dim, self.filter_length, 1)
 b_shape = [2]
-strides = [1,1,1,1]
-deconv_shape = [2,2,2,2]
+
+# keep everything 1:1
+#strides = [1,1,1,1]
+#deconv_shape = [batch_size, 14, 14, 2]
+#padding='same'
+
+# double everything
+strides = [1,2,2,1]
+#deconv_shape = [batch_size, 28, 28, 2]
 deconv_shape = [batch_size, 14, 14, 2]
-model.add(Convolution2D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding="SAME")) # should be lower capital same
+padding='valid'
+model.add(Convolution2D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding)) 
+model.add(Activation('relu'))
+
+W_shape = [2, 2, 2, 2] # (self.nb_filter, input_dim, self.filter_length, 1)
+deconv_shape = [batch_size, 28, 28, 2]
+model.add(Convolution2D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding))  
+model.add(Activation('relu'))
 
 model.add(Flatten())
 model.add(Dense(784))
@@ -88,11 +112,6 @@ model.add(Reshape((1,28,28)))
   W_shape --- shape of the weights - should be calculated internally
    from conv_2d:  (self.nb_filter, input_dim, self.filter_length, x)
           
-   [0] ... nb_filter
-   [1] ... input_dim
-   [2] ... filter_length
-   [3] ... 1
-  
   b_shape ... shape of the biases - should be calculated internally
    [0] ... nb_filter ?
 
@@ -114,33 +133,27 @@ def conv_transpose_out_length(input_size, filter_size, border_mode, stride):
 
 """
 
-##model.add(Dropout(0.25))
-##model.add(Convolution2D_Transpose(deconv_shape=[128,18,18,1], W_shape=[3,3,1,16], b_shape=[1]))
-##model.add(Activation('relu'))
-
 print(model.summary())
-#  OLD MNIST MODEL
-#model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-#                        border_mode='valid',
-#                        input_shape=(1, img_rows, img_cols)))
-#model.add(Activation('relu'))
-#model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-#model.add(Activation('relu'))
-#model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-#model.add(Dropout(0.25))
-
-#model.add(Flatten())
-#model.add(Dense(128))
-#model.add(Activation('relu'))
-#model.add(Dropout(0.5))
-#model.add(Dense(nb_classes))
-#model.add(Activation('softmax'))
 
 model.compile(loss='mse', optimizer='sgd')
 print("Before FIT")
 
-#model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1, validation_data=(X_test, Y_test))
 model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
+
 score = model.evaluate(X_test, Y_test, verbose=0, batch_size=batch_size)
-print('Test score:', score[0])
-print('Test accuracy:', score[1])
+
+print('Test score:', score)
+
+y_pred = model.predict(Y_test[0:batch_size], verbose=0, batch_size=batch_size)
+
+for i in range(batch_size):
+    plt.imsave(arr=y_pred[i].reshape((28,28)),fname='number_'+str(i)+'_is_'+str(y_test[i])+'.png')
+
+    #print ('Number: ',i,' is ', y_test[i])
+    # if your machine has a display attached, you can use this instead (better graphics)
+    #imgplot = plt.imshow(y_pred[0].reshape((28,28)))
+    #plt.savefig('new_run_'+str(i)+'.png'
+
+save_neuralnet (model, 'mnistauto')
+
+                                    
