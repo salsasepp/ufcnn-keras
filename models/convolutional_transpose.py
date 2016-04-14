@@ -187,7 +187,8 @@ class Convolution2D_Transpose(Layer):
         return K.permute_dimensions(output, (0, 3, 1, 2))
 
     def get_config(self):
-        config = {'name': self.__class__.__name__,
+        config = {
+                  #'name': self.__class__.__name__,
                   'init': self.init.__name__,
                   'activation': self.activation.__name__,
                   'padding': self.padding,
