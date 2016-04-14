@@ -15,11 +15,19 @@ from keras.layers.convolutional_transpose import Convolution2D_Transpose
    modified from https://github.com/loliverhennigh/All-Convnet-Autoencoder-Example 
    An autoencoder with 2D Convolution-Transpose layer in TF
 """
+
 def save_neuralnet (model, model_name):
 
     json_string = model.to_json()
     open(model_name + '_architecture.json', 'w').write(json_string)
     model.save_weights(model_name + '_weights.h5', overwrite=True)
+
+def load_neuralnet (model_name):
+    # The 2D Convolution2D_Transpose class needs to be stated whil loading!
+    model = model_from_json(open(model_name+'_architecture.json').read(),{'Convolution2D_Transpose':Convolution2D_Transpose})
+    model.load_weights(model_name+'_weights.h5')
+    return model
+
 
 
 batch_size = 100 # total number of elements in the X_ and Y_ (60000 train, 10000 test) arrays must be a multiple of batch_size!
