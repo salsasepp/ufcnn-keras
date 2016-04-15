@@ -63,7 +63,7 @@ print("Y SHAPE",Y_train.shape)
 
 
 model = Sequential()
-nb_filter = 32
+nb_filter = 16
 
 # input  28 * 28, output 24 * 24
 model.add(Convolution2D(nb_filter, 5, 5, input_shape=((1, img_rows, img_cols)), border_mode = 'valid'))
@@ -77,26 +77,28 @@ model.add(Activation('relu'))
 model.add(Convolution2D(nb_filter, 5, 5, border_mode = 'valid'))
 model.add(Activation('relu'))
 
-# input  16 * 16, output 14 * 14
-model.add(Convolution2D(nb_filter, 3, 3, border_mode = 'valid'))
+# input  16 * 16, output 12 * 12 * 16
+model.add(Convolution2D(nb_filter, 5, 5, border_mode = 'valid'))
 model.add(Activation('relu'))
 
-# input  14 * 14 * 4, output 14 * 14 * 2
-model.add(Convolution2D(2, 1, 1, border_mode = 'valid'))
+# input  12 * 12, output 8 * 8 * 16
+model.add(Convolution2D(nb_filter, 5, 5, border_mode = 'valid'))
 model.add(Activation('relu'))
 
-# input  7 * 7 * 2, output 98
-model.add(MaxPooling2D(pool_size=(2, 2),strides=None, border_mode='valid'))
+# input  8 * 8, output 7 * 7 * 16
+model.add(Convolution2D(5, 2, 2, border_mode = 'valid'))
+model.add(Activation('relu'))
+
 
 model.add(Flatten())
 model.add(Dropout(0.2))
 
 #model.add(Reshape((1,1,98)))
-model.add(Reshape((1,98)))
+model.add(Reshape((5,49)))
 
 # input  input 98, needs to be blown up 8 fold 
-W_shape = [2, 1, 1] 
-b_shape = [1]
+W_shape = [2, 5, 5] 
+b_shape = [5]
 strides = [1,2,1]
 padding='valid'
 
@@ -104,15 +106,21 @@ padding='valid'
 
 # double everything
 #deconv_shape = [batch_size, output_size_y, output_size_x, number_of_filters]
-deconv_shape = [batch_size, 98*2, 1]
+deconv_shape = [batch_size, 98*1, 5]
 model.add(Convolution1D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding)) 
 model.add(Activation('relu'))
 
-deconv_shape = [batch_size, 98*4, 1]
+deconv_shape = [batch_size, 98*2, 5]
+model.add(Convolution1D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding))  
+model.add(Activation('relu'))
+
+deconv_shape = [batch_size, 98*4, 5]
 model.add(Convolution1D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding))  
 model.add(Activation('relu'))
 
 deconv_shape = [batch_size, 98*8, 1] ## 98 * 8 ist OUTPUT ROWS, 1 Output COLS!
+W_shape = [2, 1, 5] 
+b_shape = [1]
 model.add(Convolution1D_Transpose(deconv_shape=deconv_shape,  W_shape=W_shape, b_shape=b_shape, strides=strides, padding=padding))  
 model.add(Activation('relu'))
 
@@ -120,7 +128,7 @@ model.add(Activation('relu'))
 
 print(model.summary())
 
-model.compile(loss='mse', optimizer='sgd')
+model.compile(loss='mse', optimizer='rmsprop')
 print("Before FIT")
 
 model.fit(X_train, Y_train, batch_size=batch_size, nb_epoch=nb_epoch, verbose=1)
