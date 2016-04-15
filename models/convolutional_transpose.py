@@ -17,36 +17,23 @@ class Convolution2D_Transpose(Layer):
         Must be placed in the keras/layers/ directory.
 
         W_shape --- shape of the weights - should be calculated internally
-         from conv_2d:  (self.nb_filter, input_dim, self.filter_length, x)
-
-         [0] ... nb_filter
-         [1] ... input_dim
-         [2] ... filter_length
-         [3] ... 1
+         [filter_dim_y, filter_dim_x, self.nb_filter(=number of channels in output), number_of_channels_in_input]
 
         b_shape ... shape of the biases - should be calculated internally
          [0] ... nb_filter 
 
+        strides 
+         Strides of the filters
+         [stride_in_batch_size(must be 1), stride_y, stride_x, stride_in_depth (must be 1)]
+
         deconv_shape
          this is output_shape of TF conv2d_transpose
-         [ batch_size, input_cols, input_rows, input_depth]
+         deconv_shape = [batch_size, output_size_y, output_size_x, number_of_filters]
 
+        padding: valid|same (small caps)
 
-        Input should be optimized: 
-          W_shape --- shape of the weights - should be calculated internally
-          b_shape ... shape of the biases - should be calculated internally
+        input_dim, input_length ... Keras input parameters
 
-          deconv_shape of the form
-              [height, width, output_channels, in_channels]
-              this is set to be the Output_shape of the layer
-
-          or output shape of the form  [None, kernel_height, kernel_width, output_depth]
-
-
-
-          padding: valid|same
-
-          input_dim, input_length ... Keras input parameters
 
         Also U can set the output_shape(deconv_shape) according to:
 
@@ -59,12 +46,6 @@ class Convolution2D_Transpose(Layer):
                 output_size = input_size
             return output_size
           
-         TODO for Serialization:
-            The config dictionary returned by your layer's get_config probably included the class name as name. 
-            Just remove that name entry from get_config.
-
-            If your layer requires more to be instantiated than just calling it with config as kwargs: implement a from_config classmethod. 
-            For examples of complex from_config methods, see the Lambda layer or Merge layer.
     """
 
     input_ndim = 4
@@ -108,30 +89,6 @@ class Convolution2D_Transpose(Layer):
 
         super(Convolution2D_Transpose, self).__init__(**kwargs)
 
-    #    OLD keras 0.3.x
-    #    def build(self):
-    #        self.W = self.init(self.W_shape)
-    #        self.b = K.zeros(self.b_shape)
-    #        self.trainable_weights = [self.W, self.b]
-    #        self.regularizers = []
-    #
-    #        if self.W_regularizer:
-    #            self.W_regularizer.set_param(self.W)
-    #            self.regularizers.append(self.W_regularizer)
-    #
-    #        if self.b_regularizer:
-    #            self.b_regularizer.set_param(self.b)
-    #            self.regularizers.append(self.b_regularizer)
-    #
-    #        if self.activity_regularizer:
-    #            self.activity_regularizer.set_layer(self)
-    #            self.regularizers.append(self.activity_regularizer)
-    #
-    #        if self.initial_weights is not None:
-    #            self.set_weights(self.initial_weights)
-    #            del self.initial_weights
-
-    # NEW keras 1.0
     def build(self, input_shape):
         input_dim = input_shape[2]
         #self.W_shape = (self.nb_filter, input_dim, self.filter_length, 1) # goven from outside
@@ -167,15 +124,6 @@ class Convolution2D_Transpose(Layer):
     def get_output_shape(self, input_shape):
         return self.deconv_shape
 
-    #def get_output_OLD(self, train=False):
-    #    X = self.get_input(train)
-    #    X = K.permute_dimensions(X, (0, 2, 3, 1))
-    #    conv_out = tf.nn.conv2d_transpose(X, self.W, strides=self.strides,
-    #                                      padding=self.padding,
-    #                                      output_shape=self.deconv_shape)
-    #    output = conv_out + K.reshape(self.b, (1, 1, 1, self.W_shape[2]))
-    #    return K.permute_dimensions(output, (0, 3, 1, 2))
-
     def call(self, X,  mask=None):
         #X = self.get_input(train)
         X = K.permute_dimensions(X, (0, 2, 3, 1))
@@ -188,7 +136,6 @@ class Convolution2D_Transpose(Layer):
 
     def get_config(self):
         config = {
-                  #'name': self.__class__.__name__,
                   'init': self.init.__name__,
                   'activation': self.activation.__name__,
                   'padding': self.padding,
@@ -206,6 +153,4 @@ class Convolution2D_Transpose(Layer):
 
     def get_output_shape_for(self, input_shape):
         return (self.deconv_shape[0],self.deconv_shape[1],self.deconv_shape[2],self.deconv_shape[3])
-        #return (None, 28, 28 ,1)
  
-
