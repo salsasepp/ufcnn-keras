@@ -30,7 +30,7 @@ def load_neuralnet (model_name):
 
 
 batch_size = 100 # total number of elements in the X_ and Y_ (60000 train, 10000 test) arrays must be a multiple of batch_size!
-nb_epoch = 100
+nb_epoch = 500
 
 # input image dimensions
 img_rows, img_cols = 28, 28
@@ -137,7 +137,7 @@ score = model.evaluate(X_test, Y_test, verbose=0, batch_size=batch_size)
 
 print('Test score:', score)
 
-y_pred = model.predict(Y_test[0:batch_size], verbose=0, batch_size=batch_size)
+y_pred = model.predict(X_test[0:batch_size], verbose=0, batch_size=batch_size)
 
 for i in range(batch_size):
     plt.imsave(arr=y_pred[i].reshape((28,28)),fname='number_'+str(i)+'_is_'+str(y_test[i])+'.png')
