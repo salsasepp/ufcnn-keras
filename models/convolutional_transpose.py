@@ -1,21 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from .. import backend as K
-from .. import activations, initializations, regularizers, constraints
-from ..engine import Layer, InputSpec
+from keras import backend as K
+from keras import activations, initializations, regularizers, constraints
+from keras.engine import Layer, InputSpec
 
 import tensorflow as tf
 
 
 def deconv_output_length(input_length, filter_size, border_mode, stride):
+    print("input_lenght: {}, filter_size: {}, border_mode: {}, stride: {}".format(
+        input_length, filter_size, border_mode, stride
+    ))
     if input_length is None:
         return None
     assert border_mode in {'same', 'valid'}
     if border_mode == 'same':
         output_length = input_length * stride
     elif border_mode == 'valid':
-        output_length = input_length * stride - filter_size + 1
+        # output_length = input_length * stride - filter_size + 1
+        output_length = (input_length - 1) * stride + filter_size
     return output_length
 
 
@@ -253,7 +257,7 @@ class Convolution1D_Transpose(Layer):
 
     def build(self, input_shape):
         input_dim = input_shape[2]
-        self.W_shape = (self.nb_filter, input_dim, self.filter_length, 1)
+        # self.W_shape = (self.nb_filter, input_dim, self.filter_length, 1)
         self.W = self.init(self.W_shape, name='{}_W'.format(self.name))
         self.b = K.zeros((self.b_shape), name='{}_b'.format(self.name))
         self.trainable_weights = [self.W, self.b]
@@ -414,6 +418,7 @@ class Convolution1D_Transpose_Arbitrary(Layer):
         input_dim = input_shape[2]
         # self.W_shape = (self.nb_filter, input_dim, self.filter_length, 1)
         self.W_shape = (1, self.filter_length, self.nb_filter, input_dim)
+        print("Weights shape (filter_height, filter_width, nb_filter, input_dim): ", self.W_shape)
         self.W = self.init(self.W_shape, name='{}_W'.format(self.name))
         self.b = K.zeros((self.nb_filter), name='{}_b'.format(self.name))
         self.trainable_weights = [self.W, self.b]
@@ -442,26 +447,45 @@ class Convolution1D_Transpose_Arbitrary(Layer):
             del self.initial_weights
 
 
-    def get_output_shape_for(self, input_shape):
+    def get_output_shape_for(self, input_shape=None):
         length = deconv_output_length(input_shape[1],
                                     self.filter_length,
-                                    self.border_mode,
+                                    self.padding,
                                     self.strides[2])
+        print("Output length: ", length)
         return (input_shape[0], length, self.nb_filter)
 
 
     def call(self, X,  mask=None):
         # 1D -> 2D
+        batch = K.shape(X)[0]
+        width = deconv_output_length(K.shape(X)[1],
+                                    self.filter_length,
+                                    self.padding,
+                                    self.strides[2])
+
+        print("Output width: ", width)
+
+        print("Input shape: ", K.shape(X))
         X = K.expand_dims(X,2)
-        X = K.permute_dimensions(X, (0, 2, 3, 1))
+        print("Input shape after expand: ", K.shape(X))
+        # X = K.permute_dimensions(X, (0, 2, 3, 1))
+        X = K.permute_dimensions(X, (0, 2, 1, 3))
+        print("Input shape after permute: ", K.shape(X))
+        deconv_shape = tf.pack([batch, 1, width, self.nb_filter])
+        print("Deconv shape: ", deconv_shape)
         conv_out = tf.nn.conv2d_transpose(X, self.W, strides=self.strides,
                                           padding=self.padding.upper(),
-                                          output_shape=self.deconv_shape)
+                                          output_shape=deconv_shape)
 
         output = conv_out + K.reshape(self.b, (1, 1, 1, self.W_shape[2]))
-        output =  K.permute_dimensions(output, (0, 3, 1, 2))
+        print("Output shape: ", K.shape(output))
+        # output =  K.permute_dimensions(output, (0, 3, 1, 2))
+        output =  K.permute_dimensions(output, (0, 2, 1, 3))
+        print("Output shape after permute: ", K.shape(output))
         # 2D -> 1D
         output = K.squeeze(output,2)
+        print("Output shape after squeeze: ", K.shape(output))
         return output
 
     def get_config(self):
@@ -482,6 +506,6 @@ class Convolution1D_Transpose_Arbitrary(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
     @property
-    def get_output_shape_for(self, input_shape):
+    def get_output_shape(self, input_shape):
         #return (self.deconv_shape[0],self.deconv_shape[1],self.deconv_shape[2],self.deconv_shape[3])
         return self.get_output_shape_for(input_shape=input_shape)
