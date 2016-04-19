@@ -743,7 +743,8 @@ def generator(X, y):
             y_array = y.loc[date_idx].values
             X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
             y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-            yield {'input': X_samples, 'output': y_samples}
+            #yield {'input': X_samples, 'output': y_samples}
+            yield (X_samples, y_samples)
 
 
 def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
@@ -1208,11 +1209,11 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
-    simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 20 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 2
+    simulation = True # Use True for simulated cosine data, False - for data from files
+    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 1
     testing_count = 8
-    sequence_length = 5000
+    sequence_length = 50000
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
@@ -1245,6 +1246,7 @@ if action == 'tradcom_simple':
         features_list = list(range(0,2))
         print("Using simulated data for training...")
         (X, y, mean, std) = get_simulation()
+        (X_val, y_val, mean_, std_) = get_simulation()
     #
     print("X shape: ", X.shape)
     # print(X)
@@ -1268,7 +1270,7 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
     else:
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=rmsprop )
+                                   loss="mse", sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
@@ -1282,11 +1284,9 @@ if action == 'tradcom_simple':
     start_time = time.time()
     epoch = 400
     history = model.fit_generator(generator(X, y),
-                      nb_worker=1,
                       samples_per_epoch=training_count,
                       verbose=1,
                       nb_epoch=epoch,
-                      show_accuracy=True,
                       validation_data=generator(X_val, y_val),
                       nb_val_samples=validation_count)
     print(history.history)
