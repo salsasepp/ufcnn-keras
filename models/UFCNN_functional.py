@@ -1328,5 +1328,6 @@ if action == 'tradcom_simple':
         print("Predicting: day ",i ,": ", date_idx)
         predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
 
-        check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
+        # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
+        check_prediction(X_pred.loc[date_idx], y_samples, predicted_output, mean, std)
         i += 1
