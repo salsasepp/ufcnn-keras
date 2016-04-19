@@ -499,7 +499,9 @@ Convolution1D_Transpose_Arbitrary
                   'activity_regularizer': self.activity_regularizer.get_config() if self.activity_regularizer else None,
                   'W_constraint': self.W_constraint.get_config() if self.W_constraint else None,
                   'b_constraint': self.b_constraint.get_config() if self.b_constraint else None,
-                  'W_shape': self.W_shape
+                  'W_shape': self.W_shape,
+                  'filter_length': self.filter_length,
+                  'nb_filter': self.nb_filter
                   }
         base_config = super(Convolution1D_Transpose_Arbitrary, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
