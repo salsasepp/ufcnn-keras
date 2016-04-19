@@ -1213,7 +1213,7 @@ if action == 'tradcom_simple':
     training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     validation_count = 1
     testing_count = 8
-    sequence_length = 50000
+    sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
