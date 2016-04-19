@@ -158,7 +158,7 @@ def ufcnn_model_concat(sequence_length=5000,
     #model.add_node(Activation(activation), name='relu6', input='conv6')
 
 
-    merge6 = merge([relu3, relu5], mode='concat', concat_axis=1)
+    merge6 = merge([relu3, relu5], mode='concat')
     conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge6)
     relu6 = Activation(activation)(conv6)
 
@@ -169,7 +169,7 @@ def ufcnn_model_concat(sequence_length=5000,
     #                 merge_mode='concat', concat_axis=-1)
     #model.add_node(Activation(activation), name='relu7', input='conv7')
 
-    merge7 = merge([relu2, relu6], mode='concat', concat_axis=1)
+    merge7 = merge([relu2, relu6], mode='concat')
     conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge7)
     relu7 = Activation(activation)(conv7)
 
@@ -180,7 +180,7 @@ def ufcnn_model_concat(sequence_length=5000,
     #                 merge_mode='concat', concat_axis=-1)
     #model.add_node(Activation(activation), name='relu8', input='conv8')
 
-    merge8 = merge([relu1, relu7], mode='concat', concat_axis=1)
+    merge8 = merge([relu1, relu7], mode='concat')
     conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
     relu8 = Activation(activation)(conv8)
 
