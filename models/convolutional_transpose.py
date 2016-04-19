@@ -363,7 +363,7 @@ class Convolution1D_Transpose_Arbitrary(Layer):
             elif border_mode == 'same':
                 output_size = input_size
             return output_size
-
+Convolution1D_Transpose_Arbitrary
     """
 
     input_ndim = 3
@@ -499,10 +499,9 @@ class Convolution1D_Transpose_Arbitrary(Layer):
                   'activity_regularizer': self.activity_regularizer.get_config() if self.activity_regularizer else None,
                   'W_constraint': self.W_constraint.get_config() if self.W_constraint else None,
                   'b_constraint': self.b_constraint.get_config() if self.b_constraint else None,
-                  'W_shape': self.W_shape,
-                  'b_shape': self.b_shape,
-                  'deconv_shape': self.deconv_shape }
-        base_config = super(Convolution1D_Transpose, self).get_config()
+                  'W_shape': self.W_shape
+                  }
+        base_config = super(Convolution1D_Transpose_Arbitrary, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
     @property
