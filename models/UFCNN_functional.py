@@ -1271,7 +1271,7 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
     else:
         model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="mse", sequence_length=sequence_length, optimizer=rmsprop )
+                                   loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
