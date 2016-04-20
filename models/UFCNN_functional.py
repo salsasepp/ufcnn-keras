@@ -18,6 +18,7 @@ from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
 from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
+from keras.callbacks import TensorBoard
 
 from convolutional_transpose import Convolution1D_Transpose_Arbitrary
 
@@ -1288,7 +1289,8 @@ if action == 'tradcom_simple':
                       verbose=1,
                       nb_epoch=epoch,
                       validation_data=generator(X_val, y_val),
-                      nb_val_samples=validation_count)
+                      nb_val_samples=validation_count,
+                      callbacks=[TensorBoard(), ])
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
