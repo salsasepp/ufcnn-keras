@@ -839,7 +839,7 @@ def check_prediction(Xdf, y, yp, mean, std):
     y_corr_pred_class = np.zeros((y.shape[2],))
     y_class      = np.zeros((y.shape[2],))
     y_labels = np.zeros((y.shape[1], y.shape[2]))
-    a=['Buy','Sell','Hold']
+    a=['Sell','Buy','Hold']
 
     for i in range (y.shape[1]):
         delta = 0.
@@ -873,14 +873,14 @@ def check_prediction(Xdf, y, yp, mean, std):
     yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
     #print(yp_p)
 
-    ydf2 = pd.DataFrame(yp_p, columns=['buy','sell','hold'])
+    ydf2 = pd.DataFrame(yp_p, columns=['sell','buy','hold'])
     Xdf2 = Xdf.reset_index(drop=True)
     Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
 
     Xdf2['signal'] = 0.
     print(Xdf2)
 
-    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['buy','sell','hold'], index=Xdf.index)], axis=1)
+    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['sell','buy','hold'], index=Xdf.index)], axis=1)
     xy_df = xy_df.rename(columns={2: "bidpx_", 3: "bidsz_", 4: "askpx_", 5: "asksz_"})
 
 
@@ -1210,9 +1210,9 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = True # Use True for simulated cosine data, False - for data from files
-    training_count = 2 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    training_count = 20 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     validation_count = 1
-    testing_count = 8
+    testing_count = 18
     sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
@@ -1269,8 +1269,8 @@ if action == 'tradcom_simple':
     if model_name is not None:
         model = load_neuralnet(model_name)
     else:
-        model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="mse", sequence_length=sequence_length, optimizer=rmsprop )
+        model = ufcnn_model_deconv(regression = False, output_dim=3, features=len(features_list), 
+                                   loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
