@@ -18,6 +18,7 @@ from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
 from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
+from keras.callbacks import TensorBoard
 
 from convolutional_transpose import Convolution1D_Transpose_Arbitrary
 
@@ -1084,7 +1085,7 @@ def get_simulation(write_spans = True):
     Xdf = df[["askpx_", "bidpx_"]]
     df['buy'] = df['Buy'] if not write_spans else df['Buys']
     df['sell'] = df['Sell'] if not write_spans else df['Sells']
-    ydf = df[["buy", "sell"]]
+    ydf = df[["sell", "buy"]]
     
     Xdf['Milliseconds'] = Xdf.index
     Xdf['Date'] = pd.to_datetime(date.today())
@@ -1266,11 +1267,13 @@ if action == 'tradcom_simple':
 
 
     # load the model from disk if model name is given...
+    loss="categorical_crossentropy"
     if model_name is not None:
         model = load_neuralnet(model_name)
+        model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
         model = ufcnn_model_deconv(regression = False, output_dim=3, features=len(features_list), 
-                                   loss="categorical_crossentropy", sequence_length=sequence_length, optimizer=rmsprop )
+                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
 
@@ -1288,7 +1291,8 @@ if action == 'tradcom_simple':
                       verbose=1,
                       nb_epoch=epoch,
                       validation_data=generator(X_val, y_val),
-                      nb_val_samples=validation_count)
+                      nb_val_samples=validation_count,
+                      callbacks=[TensorBoard(), ])
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
