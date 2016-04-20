@@ -839,7 +839,7 @@ def check_prediction(Xdf, y, yp, mean, std):
     y_corr_pred_class = np.zeros((y.shape[2],))
     y_class      = np.zeros((y.shape[2],))
     y_labels = np.zeros((y.shape[1], y.shape[2]))
-    a=['Buy','Sell','Hold']
+    a=['Sell','Buy','Hold']
 
     for i in range (y.shape[1]):
         delta = 0.
@@ -873,14 +873,14 @@ def check_prediction(Xdf, y, yp, mean, std):
     yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
     #print(yp_p)
 
-    ydf2 = pd.DataFrame(yp_p, columns=['buy','sell','hold'])
+    ydf2 = pd.DataFrame(yp_p, columns=['sell','buy','hold'])
     Xdf2 = Xdf.reset_index(drop=True)
     Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
 
     Xdf2['signal'] = 0.
     print(Xdf2)
 
-    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['buy','sell','hold'], index=Xdf.index)], axis=1)
+    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['sell','buy','hold'], index=Xdf.index)], axis=1)
     xy_df = xy_df.rename(columns={2: "bidpx_", 3: "bidsz_", 4: "askpx_", 5: "asksz_"})
 
 
@@ -1084,7 +1084,7 @@ def get_simulation(write_spans = True):
     Xdf = df[["askpx_", "bidpx_"]]
     df['buy'] = df['Buy'] if not write_spans else df['Buys']
     df['sell'] = df['Sell'] if not write_spans else df['Sells']
-    ydf = df[["buy", "sell"]]
+    ydf = df[["sell", "buy"]]
     
     Xdf['Milliseconds'] = Xdf.index
     Xdf['Date'] = pd.to_datetime(date.today())
