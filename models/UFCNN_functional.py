@@ -63,13 +63,13 @@ def print_layers_shapes(model):
         
 
 def save_neuralnet (model, model_name):
-
+    locpath="./"
     json_string = model.to_json()
-    open(path + model_name + '_architecture.json', 'w').write(json_string)
-    model.save_weights(path + model_name + '_weights.h5', overwrite=True)
+    open(locpath + model_name + '_architecture.json', 'w').write(json_string)
+    model.save_weights(locpath + model_name + '_weights.h5', overwrite=True)
 
     yaml_string = model.to_yaml()
-    with open(path + model_name + '_data.yml', 'w') as outfile:
+    with open(locpath + model_name + '_data.yml', 'w') as outfile:
         outfile.write( yaml_string)
 
 def load_neuralnet(model_name):
@@ -1210,7 +1210,7 @@ if action == 'tracking':
 
 
 if action == 'tradcom_simple':
-    simulation = True # Use True for simulated cosine data, False - for data from files
+    simulation = False # Use True for simulated cosine data, False - for data from files
     training_count = 20 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     validation_count = 1
     testing_count = 18
@@ -1285,7 +1285,7 @@ if action == 'tradcom_simple':
     #                 batch_size=1)
 
     start_time = time.time()
-    epoch = 400
+    epoch =400 
     history = model.fit_generator(generator(X, y),
                       samples_per_epoch=training_count,
                       verbose=1,
