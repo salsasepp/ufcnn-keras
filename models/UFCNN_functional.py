@@ -77,8 +77,9 @@ def load_neuralnet(model_name):
     reading the model from disk - including all the trained weights and the complete model design (hyperparams, planes,..)
     """
 
-    arch_name = path + model_name + '_architecture.json'
-    weight_name = path + model_name + '_weights.h5'
+    locpath="./"
+    arch_name = locpath + model_name + '_architecture.json'
+    weight_name = locpath + model_name + '_weights.h5'
 
     if not os.path.isfile(arch_name) or not os.path.isfile(weight_name):
         print("model_name given and file %s and/or %s not existing. Aborting." % (arch_name, weight_name))
@@ -86,7 +87,8 @@ def load_neuralnet(model_name):
 
     print("Loaded model: ",model_name)
 
-    model = model_from_json(open(arch_name).read())
+    model = model_from_json(open(arch_name).read(),{'Convolution1D_Transpose_Arbitrary':Convolution1D_Transpose_Arbitrary})
+
     model.load_weights(weight_name)
     return model
 
@@ -1285,7 +1287,7 @@ if action == 'tradcom_simple':
     #                 batch_size=1)
 
     start_time = time.time()
-    epoch =400 
+    epoch = 400
     history = model.fit_generator(generator(X, y),
                       samples_per_epoch=training_count,
                       verbose=1,

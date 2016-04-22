@@ -388,7 +388,11 @@ Convolution1D_Transpose_Arbitrary
         self.activation = activations.get(activation)
         assert padding in {'valid', 'same'}, 'border_mode must be in {valid, same}'
         self.padding = padding
-        self.strides = [strides[0], 1, strides[1], strides[2]]
+        # necessary for loading, since a 4 dim. stride will be saved
+        if len(strides) == 3:
+            self.strides = [strides[0], 1, strides[1], strides[2]]
+        else:
+            self.strides = strides
 
         self.W_regularizer = regularizers.get(W_regularizer)
         self.b_regularizer = regularizers.get(b_regularizer)
@@ -456,7 +460,7 @@ Convolution1D_Transpose_Arbitrary
         return (input_shape[0], length, self.nb_filter)
 
 
-    def call(self, X,  mask=None):
+    def call(self, X, mask=None):
         # 1D -> 2D
         batch = K.shape(X)[0]
         width = deconv_output_length(K.shape(X)[1],
@@ -499,9 +503,10 @@ Convolution1D_Transpose_Arbitrary
                   'activity_regularizer': self.activity_regularizer.get_config() if self.activity_regularizer else None,
                   'W_constraint': self.W_constraint.get_config() if self.W_constraint else None,
                   'b_constraint': self.b_constraint.get_config() if self.b_constraint else None,
-                  'W_shape': self.W_shape,
                   'filter_length': self.filter_length,
-                  'nb_filter': self.nb_filter
+                  'nb_filter': self.nb_filter,
+                  'input_length': self.input_length,
+                  'input_dim': self.input_dim
                   }
         base_config = super(Convolution1D_Transpose_Arbitrary, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
