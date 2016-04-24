@@ -11,6 +11,7 @@ import time
 import datetime
 import re
 
+from keras import backend as K
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
@@ -18,9 +19,13 @@ from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
 from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
+
 from keras.callbacks import TensorBoard
 
-from convolutional_transpose import Convolution1D_Transpose_Arbitrary
+try:
+    from convolutional_transpose import Convolution1D_Transpose_Arbitrary
+except ImportError:
+    print ("convolutional_transpose.py not available. This might lead to later errors. Are you running Theano?")
 
 #from keras.layers.core import Dense, Dropout, Activation, TimeDistributedDense, Flatten, Reshape, Permute, Merge, Lambda
 #from keras.layers.convolutional import Convolution1D, MaxPooling1D, Convolution2D, MaxPooling2D, UpSampling1D, UpSampling2D, ZeroPadding1D
@@ -87,7 +92,10 @@ def load_neuralnet(model_name):
 
     print("Loaded model: ",model_name)
 
-    model = model_from_json(open(arch_name).read(),{'Convolution1D_Transpose_Arbitrary':Convolution1D_Transpose_Arbitrary})
+    try:
+        model = model_from_json(open(arch_name).read(),{'Convolution1D_Transpose_Arbitrary':Convolution1D_Transpose_Arbitrary})
+    except NameError: # are we on Theano?
+        model = model_from_json(open(arch_name).read())
 
     model.load_weights(weight_name)
     return model
@@ -831,8 +839,100 @@ def train_and_predict_classification(model, sequence_length=5000, features=32, o
     return {'model': model, 'predicted_output': predicted_output['output'], 'expected_output': y}
 
     
-def check_prediction(Xdf, y, yp, mean, std):
+#def check_prediction(Xdf, y, yp, mean, std):
+#    """ Check the predicted classes and print results
+#    """
+#    ## MSE for testing
+#    total_error  = 0
+#    correct_class= 0
+#
+#    y_pred_class = np.zeros((y.shape[2],))
+#    y_corr_pred_class = np.zeros((y.shape[2],))
+#    y_class      = np.zeros((y.shape[2],))
+#    y_labels = np.zeros((y.shape[1], y.shape[2]))
+#    a=['Sell','Buy','Hold']
+#
+#    for i in range (y.shape[1]):
+#        delta = 0.
+#        for j in range(y.shape[2]):
+#            delta += (y[0][i][j] - yp[0][i][j]) * (y[0][i][j] - yp[0][i][j])
+#    
+#        total_error += delta
+#        
+#        #if np.any(y[0][i] != 0):     # some debug output, comment if not needed!
+#        #    print("Actual: ", y[0][i])
+#        #    print("Predicted: ", yp[0][i])
+#            
+#        if np.argmax(y[0][i]) == np.argmax(yp[0][i]):
+#            correct_class += 1
+#            y_corr_pred_class[np.argmax(yp[0][i])] += 1.
+#
+#        y_pred_class[np.argmax(yp[0][i])] += 1.
+#        y_class[np.argmax(y[0][i])] += 1.
+#        y_labels[i][np.argmax(yp[0][i])] = 1
+#
+#    print()
+#    print("Total MSE Error: ",  total_error / y.shape[1])
+#    print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
+#    
+#    for i in range(y.shape[2]):
+#        print("%4s: Correctly Predicted / Predicted / Total:    %6d/%6d/%7d" %(a[i], y_corr_pred_class[i], y_pred_class[i], y_class[i]))
+#
+#    Xdf = Xdf * std
+#    Xdf = Xdf + mean
+#
+#    yp_p = yp.reshape((yp.shape[1],yp.shape[2]))
+#    #print(yp_p)
+#
+#    ydf2 = pd.DataFrame(yp_p, columns=['sell','buy','hold'])
+#    Xdf2 = Xdf.reset_index(drop=True)
+#    Xdf2 = pd.concat([Xdf2,ydf2], axis = 1)
+#
+#    Xdf2['signal'] = 0.
+#    print(Xdf2)
+#
+#    xy_df = pd.concat([Xdf, pd.DataFrame(y_labels, columns=['sell','buy','hold'], index=Xdf.index)], axis=1)
+#    xy_df = xy_df.rename(columns={2: "bidpx_", 3: "bidsz_", 4: "askpx_", 5: "asksz_"})
+#
+#
+#    # store everything in signal
+#    # -1 for short, 1 for long...
+#    Xdf2['signal'] = Xdf2.apply(lambda row: (1  if row['buy']  > row['hold'] and row['buy']  > row['sell'] else 0 ), axis=1)
+#    Xdf2['signal'] = Xdf2.apply(lambda row: (-1 if row['sell'] > row['hold'] and row['sell'] > row['buy'] else row['signal'] ), axis=1)
+#
+#    invested_tics = 0
+#    pnl = 0.
+#    position = 0.
+#    last_row = None
+#    nr_trades = 0
+#    trade_pnl = 0.
+#
+#    for (index, row) in Xdf2.iterrows():
+#        (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.0)
+#        pnl += pnl_
+#         
+#        last_row = row
+#        if position < -0.1 or position > 0.1:
+#            invested_tics +=1
+#        if is_trade:
+#            nr_trades += 1
+#            trade_pnl = 0.
+#        trade_pnl += pnl_
+#
+#    sig_pnl, sig_trades = get_pnl(xy_df)
+#    print("Signals PnL: {}, # of trades: {}".format(sig_pnl, sig_trades))
+#
+#    print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
+#    print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
+#
+#    return pnl
+    
+### END
+
+
+def check_prediction(Xdf, y, yp, mean, std, day=None):
     """ Check the predicted classes and print results
+        results of this version (ufcnn6) where checked by Stefan on  20160424
     """
     ## MSE for testing
     total_error  = 0
@@ -892,32 +992,104 @@ def check_prediction(Xdf, y, yp, mean, std):
     Xdf2['signal'] = Xdf2.apply(lambda row: (1  if row['buy']  > row['hold'] and row['buy']  > row['sell'] else 0 ), axis=1)
     Xdf2['signal'] = Xdf2.apply(lambda row: (-1 if row['sell'] > row['hold'] and row['sell'] > row['buy'] else row['signal'] ), axis=1)
 
+    print("Xdf2")
+    print(Xdf2)
+
     invested_tics = 0
     pnl = 0.
     position = 0.
     last_row = None
     nr_trades = 0
     trade_pnl = 0.
+    last_open_rate = None
+    last_position = 0
+    open_index = 0
+   
 
     for (index, row) in Xdf2.iterrows():
-        (pnl_, position, is_trade) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.0)
-        pnl += pnl_
+        (pnl_, position, is_trade, close_rate, open_rate, current_pnl) = calculate_pnl(position, last_row, row, fee_per_roundtrip=0.0)
          
         last_row = row
         if position < -0.1 or position > 0.1:
             invested_tics +=1
+
         if is_trade:
+            #if last_open_rate is not None:
+            #    print("TradeData;",nr_trades,";",last_position,";",day,";",open_index,";",last_open_rate,";",index,";",close_rate,";",trade_pnl,";",pnl)
+
             nr_trades += 1
-            trade_pnl = 0.
-        trade_pnl += pnl_
+            trade_pnl = current_pnl
+            open_index = index
+            last_position = position
+            last_open_rate = open_rate
+        else:
+            trade_pnl += pnl_
+
+        pnl += pnl_
 
     sig_pnl, sig_trades = get_pnl(xy_df)
     print("Signals PnL: {}, # of trades: {}".format(sig_pnl, sig_trades))
 
     print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
     print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
+    return pnl
     
 ### END
+
+def calculate_pnl(position, row, next_row, fee_per_roundtrip=0.):
+    """
+        results of this version (ufcnn6) where checked by Stefan on  20160424
+    """
+    close_rate = 0.
+    open_rate = 0.
+    current_pnl = 0
+
+    if row is None or next_row is None:
+        return (0.,0., False, close_rate, open_rate, 0.0)
+
+    old_position = position
+
+    pnl = 0.
+
+    signal = row['signal']
+
+    #  if we are short and need to go long...
+    if position < -0.1 and signal > 0.1:
+        close_rate = row[4]
+        position = 0.
+
+    #  if we are long and need to go short...
+    if position > 0.1 and signal < -0.1:
+        close_rate = row[2]
+        position = 0.
+
+    last_rate = 0
+    if position < -0.1:
+        pnl = position * (next_row[4] - row[4]) # ASK
+
+    if position >  0.1:
+        pnl = position * (next_row[2] - row[2]) # BID
+
+
+    trade = False
+    if position == 0. and abs(signal) > 0.1:
+        position = signal
+        if position < -0.1:
+            current_pnl = position * (next_row[4] - row[2]) # ASK
+            open_rate = row[2]
+
+        if position >  0.1:
+            current_pnl = position * (next_row[2] - row[4]) # BID
+            open_rate = row[4]
+
+        current_pnl -= fee_per_roundtrip
+        trade = True
+
+    pnl = pnl + current_pnl
+
+    #print ("SIGNAL:",signal, ", old_position: ", old_position, " position:", position, ", pnl: ",pnl, "Bid: ",row[2],next_row[2],", ASK ",row[4], next_row[4] )
+    return (pnl, position, trade, close_rate, open_rate, current_pnl)
+    ## End calculate_pnl
 
 
 def get_pnl(df, max_position=1, comission=0):
@@ -957,44 +1129,44 @@ def get_pnl(df, max_position=1, comission=0):
     return pnl, len(deals)
 
 
-def calculate_pnl(position, row, next_row, fee_per_roundtrip=0.):
-    if row is None:
-        return (0.,0., False)
-
-    old_position = position
-
-    pnl = 0.
-
-    if position < -0.1:
-        pnl = position * (next_row[4] - row[4]) # ASK
-
-    if position >  0.1:
-        pnl = position * (next_row[2] - row[2]) # BID
-
-
-    signal = row['signal']
-
-    #  if we are short and need to go long...
-    if position < -0.1 and signal > 0.1:
-        position = 0.
-
-    #  if we are long and need to go short...
-    if position > 0.1 and signal < -0.1:
-        position = 0.
-
-    trade = False
-    if position == 0. and abs(signal) > 0.1:
-        position = signal
-        if position < -0.1:
-            pnl = position * (next_row[4] - row[2]) # ASK
-
-        if position >  0.1:
-            pnl = position * (next_row[2] - row[4]) # BID
-        pnl -= fee_per_roundtrip
-        trade = True
-
-    #print ("SIGNAL:",signal, ", old_position: ", old_position, " position:", position, ", pnl: ",pnl, "Bid: ",row[2],next_row[2],", ASK ",row[4], next_row[4] )
-    return (pnl, position, trade)
+#def calculate_pnl(position, row, next_row, fee_per_roundtrip=0.):
+#    if row is None:
+#        return (0.,0., False)
+#
+#    old_position = position
+#
+#    pnl = 0.
+#
+#    if position < -0.1:
+#        pnl = position * (next_row[4] - row[4]) # ASK
+#
+#    if position >  0.1:
+#        pnl = position * (next_row[2] - row[2]) # BID
+#
+#
+#    signal = row['signal']
+#
+#    #  if we are short and need to go long...
+#    if position < -0.1 and signal > 0.1:
+#        position = 0.
+#
+#    #  if we are long and need to go short...
+#    if position > 0.1 and signal < -0.1:
+#        position = 0.
+#
+#    trade = False
+#    if position == 0. and abs(signal) > 0.1:
+#        position = signal
+#        if position < -0.1:
+#            pnl = position * (next_row[4] - row[2]) # ASK
+#
+#        if position >  0.1:
+#            pnl = position * (next_row[2] - row[4]) # BID
+#        pnl -= fee_per_roundtrip
+#        trade = True
+#
+#    #print ("SIGNAL:",signal, ", old_position: ", old_position, " position:", position, ", pnl: ",pnl, "Bid: ",row[2],next_row[2],", ASK ",row[4], next_row[4] )
+#    return (pnl, position, trade)
     ## End calculate_pnl
 
 
@@ -1112,6 +1284,40 @@ def get_simulation(write_spans = True):
     
     return (Xdf,ydf,mean,std)
     
+    def calculate_future_bias(model, sequence_length, X_pred, y_pred):
+        """
+            test whether the model can predict into the future or is reading the future from the data
+        """
+
+        for date_idx in X_pred.index.get_level_values(0).unique():
+
+            X_array = X_pred.loc[date_idx].values
+            y_array = y_pred.loc[date_idx].values
+            X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+            y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+
+            print("Checking full vs. partial Prediction for day ",i ,": ", date_idx)
+            predicted_output_full = model.predict({'input': X_samples}, batch_size=1, verbose = 2)
+            print (X_samples.shape)
+
+            # feed small squences of data to the model and check wheter the preedictions are identical to predictions done in a 
+            # single run over all data
+            error_count = 0
+            total_count = 0
+
+            for j in range(sequence_length, X_samples.shape[1]):
+                if np.argmax(predicted_output_full[0,j-1]) != 2:
+                    total_count += 1
+                    predicted_output = model.predict({'input': X_samples[:,:j,:]}, batch_size=1, verbose = 2)
+                    print (predicted_output.shape)
+                    print("full:single: ", j, predicted_output_full[0,j-1], predicted_output[0,j-1])
+                    if np.argmax(predicted_output_full[0,j-1]) != np.argmax(predicted_output[0,j-1]):
+                        error_count += 1
+                        print("Error: MaxArg:", np.argmax(predicted_output_full[0,j-1]), np.argmax(predicted_output[0,j-1]))
+            
+            print ("Date: ",date_idx, "Errors/Total: ", error_count, "/", total_count)          
+
+         # calculate_future_bias() END
     
         
 
@@ -1274,6 +1480,8 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
+        #model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
+        #                           loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         model = ufcnn_model_deconv(regression = False, output_dim=3, features=len(features_list), 
                                    loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         
@@ -1286,6 +1494,11 @@ if action == 'tradcom_simple':
     #                 shuffle=False,
     #                 batch_size=1)
 
+    if K._config['backend'] != 'theano':
+        callbacks = [TensorBoard(), ]
+    else:
+        callbacks = []
+
     start_time = time.time()
     epoch = 400
     history = model.fit_generator(generator(X, y),
@@ -1294,7 +1507,8 @@ if action == 'tradcom_simple':
                       nb_epoch=epoch,
                       validation_data=generator(X_val, y_val),
                       nb_val_samples=validation_count,
-                      callbacks=[TensorBoard(), ])
+                      callbacks=callbacks)
+
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
@@ -1320,7 +1534,8 @@ if action == 'tradcom_simple':
     print(X_pred.iloc[0:200])
     print(y_pred.iloc[0:200])
 
-    i=1  
+    i=0  
+    pnl = 0.
     for date_idx in X_pred.index.get_level_values(0).unique():
 
         X_array = X_pred.loc[date_idx].values
@@ -1329,11 +1544,17 @@ if action == 'tradcom_simple':
         y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
         print(y_samples[0, 0:200, :])
 
-        inp = {'input': X_samples, 'output': y_samples}
-
         print("Predicting: day ",i ,": ", date_idx)
         predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
 
         # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
-        check_prediction(X_pred.loc[date_idx], y_samples, predicted_output, mean, std)
+        pnl_= check_prediction(X_pred.loc[date_idx], y_samples, predicted_output, mean, std)
+        pnl += pnl_
         i += 1
+    print ("Average PnL: ", pnl/i)
+
+    # Test how big the future bias would be and how big the differences / PnL would be
+    test_future_bias = True
+    test_future_bias = False
+    if test_future_bias:
+        calculate_future_bias(model, sequence_length, X_pred, y_pred)
