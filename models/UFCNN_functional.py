@@ -19,6 +19,8 @@ from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
 from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
+from keras.layers import TimeDistributed, Reshape
+from keras.layers.recurrent import LSTM
 
 from keras.callbacks import TensorBoard
 
@@ -100,6 +102,33 @@ def load_neuralnet(model_name):
     model.load_weights(weight_name)
     return model
 
+def ufcnn_model_lstm(sequence_length=5000,
+                       features=1,
+                       nb_filter=150,
+                       filter_length=5,
+                       output_dim=1,
+                       optimizer='adagrad',
+                       loss='mse',
+                       regression = True,
+                       class_mode=None,
+                       activation="softplus",
+                       init="lecun_uniform"):
+    model = Sequential()
+    model.add(LSTM(features, stateful=True, return_sequences=True, batch_input_shape=(1, sequence_length, features)))
+    model.add(TimeDistributed(Dense(sequence_length)))
+    #model.add(LSTM(sequence_length, stateful=True, return_sequences=False, batch_input_shape=(1, sequence_length, features)))
+    #model.add(Dense(sequence_length, activation='relu'))
+    #model.add(RepeatVector(maxlen))
+    model.add(LSTM(features, stateful=True, return_sequences=True))
+    model.add(TimeDistributed(Dense(output_dim)))
+    #model.add(Reshape((features*sequence_length,)))
+    model.add(Dense(output_dim))
+    model.add(Activation('softmax'))
+
+    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
+
+    print(model.summary())
+    return model
 
 def ufcnn_model_concat(sequence_length=5000,
                        features=1,
@@ -758,6 +787,27 @@ def generator(X, y):
             yield (X_samples, y_samples)
 
 
+def lstm_generator(Xdf, ydf, sequence_length = 5000):
+
+    X = np.zeros((sequence_length, len(Xdf.columns)))
+    while 1:
+        i = -1;
+        for xx in Xdf.itertuples():
+            i += 1
+            X = np.roll(X,-1)
+            X[sequence_length-1] = np.array(xx[1:])
+
+            yy = next(ydf.itertuples())
+            if i >= sequence_length - 1:
+                y = np.array(yy[1:])
+                print(X.shape) 
+                print(y.shape) 
+                yield (X.reshape((1,X.shape[0],X.shape[1])), y.reshape((1,-1)))
+            else:
+                continue
+
+
+
 def train_and_predict_classification(model, sequence_length=5000, features=32, output_dim=3, batch_size=128, epochs=5, name = "model",  training_count=3, testing_count=3):
 
     final_loss = 0
@@ -1014,8 +1064,8 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
             invested_tics +=1
 
         if is_trade:
-            #if last_open_rate is not None:
-            #    print("TradeData;",nr_trades,";",last_position,";",day,";",open_index,";",last_open_rate,";",index,";",close_rate,";",trade_pnl,";",pnl)
+            if last_open_rate is not None:
+                print("TradeData;",nr_trades,";",last_position,";",day,";",open_index,";",last_open_rate,";",index,";",close_rate,";",trade_pnl,";",pnl)
 
             nr_trades += 1
             trade_pnl = current_pnl
@@ -1283,43 +1333,65 @@ def get_simulation(write_spans = True):
     print(ydf.shape, ydf.columns)    
     
     return (Xdf,ydf,mean,std)
-    
-    def calculate_future_bias(model, sequence_length, X_pred, y_pred):
-        """
-            test whether the model can predict into the future or is reading the future from the data
-        """
-
-        for date_idx in X_pred.index.get_level_values(0).unique():
-
-            X_array = X_pred.loc[date_idx].values
-            y_array = y_pred.loc[date_idx].values
-            X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
-            y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-
-            print("Checking full vs. partial Prediction for day ",i ,": ", date_idx)
-            predicted_output_full = model.predict({'input': X_samples}, batch_size=1, verbose = 2)
-            print (X_samples.shape)
-
-            # feed small squences of data to the model and check wheter the preedictions are identical to predictions done in a 
-            # single run over all data
-            error_count = 0
-            total_count = 0
-
-            for j in range(sequence_length, X_samples.shape[1]):
-                if np.argmax(predicted_output_full[0,j-1]) != 2:
-                    total_count += 1
-                    predicted_output = model.predict({'input': X_samples[:,:j,:]}, batch_size=1, verbose = 2)
-                    print (predicted_output.shape)
-                    print("full:single: ", j, predicted_output_full[0,j-1], predicted_output[0,j-1])
-                    if np.argmax(predicted_output_full[0,j-1]) != np.argmax(predicted_output[0,j-1]):
-                        error_count += 1
-                        print("Error: MaxArg:", np.argmax(predicted_output_full[0,j-1]), np.argmax(predicted_output[0,j-1]))
-            
-            print ("Date: ",date_idx, "Errors/Total: ", error_count, "/", total_count)          
-
-         # calculate_future_bias() END
-    
         
+def test_look_ahead(model, sequence_length, X_pred, y_pred):
+    """
+        test whether the model can predict into the future or is reading the future from the data
+    """
+    print ("test_look_ahead:")
+    #sequence_length = 5000
+
+    i=0
+    
+    for date_idx in X_pred.index.get_level_values(0).unique():
+        p=0
+        X_array = X_pred.loc[date_idx].values
+        y_array = y_pred.loc[date_idx].values
+        X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+        y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+
+        print("Checking full vs. partial Prediction for day ",i ,": ", date_idx)
+        predicted_output_full = model.predict(X_samples, batch_size=1, verbose = 2)
+        predicted_output_upd = predicted_output_full.copy()
+        print (X_samples.shape)
+
+        # feed small squences of data to the model and check wheter the preedictions are identical to predictions done in a 
+        # single run over all data
+        error_count = 0
+        total_count = 0
+
+        # 0 ... the leftmost tick fed to predict
+        time_shift = 3 # >= 0
+
+        # loop through the day, ignore the first sequence_length samples (this is a simplification!)
+        for j in range(sequence_length, X_samples.shape[1]):
+                total_count += 1
+
+                # predict over the full X_samples array for comparison
+                predicted_output = model.predict(X_samples[:,j-sequence_length:j,:], batch_size=1, verbose = 2)
+                print("full:single: ", j, predicted_output_full[0,j-1-time_shift], predicted_output[0,sequence_length-1-time_shift])
+
+                # check whether the signals are identical
+                if np.argmax(predicted_output_full[0,j-1-time_shift]) != np.argmax(predicted_output[0,sequence_length-1-time_shift]):
+                    error_count += 1
+                    print("Error: MaxArg:", np.argmax(predicted_output_full[0,j-1-time_shift]), np.argmax(predicted_output[0,sequence_length-1-time_shift]))
+                    # store the time-shifted prediction
+                    predicted_output_upd[0,j-1-time_shift,:] = predicted_output[0,sequence_length-1-time_shift,:]
+                    if p < 3:
+                        p += 1
+                        np.set_printoptions(threshold=np.nan)
+                        print("First 3 Predictions")
+                        print(predicted_output)
+
+        #test the result of the time-shifted prediction
+        pnl = check_prediction(X_pred.loc[date_idx], y_samples, predicted_output_upd, mean, std)
+        i+= 1
+        print (i,"Date: ",date_idx, "Errors/Total: ", error_count, "/", total_count, "New Pnl", pnl)          
+
+        # only 3 days...
+        if i > 2:
+            break
+     # test_look_ahead() END
 
 #########################################################
 ## Test the net with damped cosine  / remove later...
@@ -1419,9 +1491,9 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 20 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 1
-    testing_count = 18
+    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 36
     sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
@@ -1470,8 +1542,8 @@ if action == 'tradcom_simple':
     #    print(_d)
 
     sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
-    #rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
-    rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
+    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
+    #rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
 
 
     # load the model from disk if model name is given...
@@ -1480,8 +1552,6 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        #model = ufcnn_model_concat(regression = False, output_dim=3, features=len(features_list), 
-        #                           loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         model = ufcnn_model_deconv(regression = False, output_dim=3, features=len(features_list), 
                                    loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         
@@ -1500,7 +1570,8 @@ if action == 'tradcom_simple':
         callbacks = []
 
     start_time = time.time()
-    epoch = 400
+    epoch = 10
+    #history = model.fit_generator(lstm_generator(X, y, sequence_length),
     history = model.fit_generator(generator(X, y),
                       samples_per_epoch=training_count,
                       verbose=1,
@@ -1546,15 +1617,14 @@ if action == 'tradcom_simple':
 
         print("Predicting: day ",i ,": ", date_idx)
         predicted_output = model.predict({'input': X_samples,}, batch_size=1, verbose = 2)
-
+   
         # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
         pnl_= check_prediction(X_pred.loc[date_idx], y_samples, predicted_output, mean, std)
         pnl += pnl_
         i += 1
     print ("Average PnL: ", pnl/i)
-
     # Test how big the future bias would be and how big the differences / PnL would be
     test_future_bias = True
-    test_future_bias = False
+    #test_future_bias = False
     if test_future_bias:
-        calculate_future_bias(model, sequence_length, X_pred, y_pred)
+        test_look_ahead(model, sequence_length, X_pred, y_pred)
