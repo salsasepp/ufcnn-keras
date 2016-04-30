@@ -114,20 +114,22 @@ def ufcnn_model_lstm(sequence_length=5000,
                        activation="softplus",
                        init="lecun_uniform"):
     model = Sequential()
-    model.add(LSTM(features, stateful=True, return_sequences=True, batch_input_shape=(1, sequence_length, features)))
-    model.add(TimeDistributed(Dense(sequence_length)))
+    model.add(LSTM(features, stateful=True, return_sequences=True, input_length = features, batch_input_shape=(1, sequence_length, features)))
+    model.add(TimeDistributed(Dense(features)))
     #model.add(LSTM(sequence_length, stateful=True, return_sequences=False, batch_input_shape=(1, sequence_length, features)))
     #model.add(Dense(sequence_length, activation='relu'))
     #model.add(RepeatVector(maxlen))
     model.add(LSTM(features, stateful=True, return_sequences=True))
     model.add(TimeDistributed(Dense(output_dim)))
+    model.add(LSTM(features, stateful=True, return_sequences=False))
     #model.add(Reshape((features*sequence_length,)))
     model.add(Dense(output_dim))
-    model.add(Activation('softmax'))
+    #model.add(Activation('softmax'))
+
+    print(model.summary())
 
     model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
 
-    print(model.summary())
     return model
 
 def ufcnn_model_concat(sequence_length=5000,
@@ -786,6 +788,16 @@ def generator(X, y):
             #yield {'input': X_samples, 'output': y_samples}
             yield (X_samples, y_samples)
 
+def get_lstm_samples(Xdf, ydf, sequence_length = 5000):
+    nsamples = 0
+    i = -1;
+    for xx in Xdf.itertuples():
+        i += 1
+        if i >= sequence_length - 1:
+            nsamples += 1
+        else:
+            continue
+    return nsamples
 
 def lstm_generator(Xdf, ydf, sequence_length = 5000):
 
@@ -800,9 +812,8 @@ def lstm_generator(Xdf, ydf, sequence_length = 5000):
             yy = next(ydf.itertuples())
             if i >= sequence_length - 1:
                 y = np.array(yy[1:])
-                print(X.shape) 
-                print(y.shape) 
-                yield (X.reshape((1,X.shape[0],X.shape[1])), y.reshape((1,-1)))
+                ret = y.reshape((1,-1))
+                yield (X.reshape((1,X.shape[0],X.shape[1])), ret)
             else:
                 continue
 
@@ -1362,9 +1373,11 @@ def test_look_ahead(model, sequence_length, X_pred, y_pred):
 
         # 0 ... the leftmost tick fed to predict
         time_shift = 3 # >= 0
-
-        # loop through the day, ignore the first sequence_length samples (this is a simplification!)
-        for j in range(sequence_length, X_samples.shape[1]):
+        shifts = [3,5,10,15,20,25,40]
+        for time_shift in shifts:
+            print ("Timeshift for InvestedTics: ",time_shift)
+            # loop through the day, ignore the first sequence_length samples (this is a simplification!)
+            for j in range(sequence_length, X_samples.shape[1]):
                 total_count += 1
 
                 # predict over the full X_samples array for comparison
@@ -1491,9 +1504,9 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 2
-    testing_count = 36
+    training_count = 1 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 1
+    testing_count = 1
     sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
@@ -1552,7 +1565,7 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        model = ufcnn_model_deconv(regression = False, output_dim=3, features=len(features_list), 
+        model = ufcnn_model_lstm(regression = False, output_dim=3, features=len(features_list), 
                                    loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
         
     print_nodes_shapes(model)
@@ -1570,15 +1583,25 @@ if action == 'tradcom_simple':
         callbacks = []
 
     start_time = time.time()
-    epoch = 10
-    #history = model.fit_generator(lstm_generator(X, y, sequence_length),
-    history = model.fit_generator(generator(X, y),
+    epoch = 90
+    use_lstm = True
+    if use_lstm:
+        history = model.fit_generator(lstm_generator(X, y, sequence_length),
+                      samples_per_epoch=get_lstm_samples(X, y, sequence_length),
+                      verbose=1,
+                      nb_epoch=epoch,
+                      #validation_data=lstm_generator(X_val, y_val, sequence_length),
+                      #nb_val_samples=validation_count,
+                      callbacks=callbacks)
+    else:
+        history = model.fit_generator(generator(X, y),
                       samples_per_epoch=training_count,
                       verbose=1,
                       nb_epoch=epoch,
                       validation_data=generator(X_val, y_val),
                       nb_val_samples=validation_count,
                       callbacks=callbacks)
+
 
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
@@ -1625,6 +1648,6 @@ if action == 'tradcom_simple':
     print ("Average PnL: ", pnl/i)
     # Test how big the future bias would be and how big the differences / PnL would be
     test_future_bias = True
-    test_future_bias = False
+    #test_future_bias = False
     if test_future_bias:
         test_look_ahead(model, sequence_length, X_pred, y_pred)
