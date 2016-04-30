@@ -1351,37 +1351,36 @@ def test_look_ahead(model, sequence_length, X_pred, y_pred):
     """
     print ("test_look_ahead:")
     #sequence_length = 5000
-
-    i=0
     
-    for date_idx in X_pred.index.get_level_values(0).unique():
-        p=0
-        X_array = X_pred.loc[date_idx].values
-        y_array = y_pred.loc[date_idx].values
-        X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
-        y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+    time_shift = 3 # >= 0
+    shifts = [3,5,10,15,20,25,40]
+    for time_shift in shifts:
+        print ("Timeshift for InvestedTics: ",time_shift)
+        i=0
+        for date_idx in X_pred.index.get_level_values(0).unique():
+            p=0
+            X_array = X_pred.loc[date_idx].values
+            y_array = y_pred.loc[date_idx].values
+            X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+            y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
 
-        print("Checking full vs. partial Prediction for day ",i ,": ", date_idx)
-        predicted_output_full = model.predict(X_samples, batch_size=1, verbose = 2)
-        predicted_output_upd = predicted_output_full.copy()
-        print (X_samples.shape)
+            print("Checking full vs. partial Prediction for day ",i ,": ", date_idx)
+            # predict over the full X_samples array for comparison
+            predicted_output_full = model.predict(X_samples, batch_size=1, verbose=2)
+            predicted_output_upd = predicted_output_full.copy()
+            print (X_samples.shape)
 
-        # feed small squences of data to the model and check wheter the preedictions are identical to predictions done in a 
-        # single run over all data
-        error_count = 0
-        total_count = 0
+            # feed small squences of data to the model and check wheter the preedictions are identical to predictions done in a 
+            # single run over all data
+            error_count = 0
+            total_count = 0
 
-        # 0 ... the leftmost tick fed to predict
-        time_shift = 3 # >= 0
-        shifts = [3,5,10,15,20,25,40]
-        for time_shift in shifts:
-            print ("Timeshift for InvestedTics: ",time_shift)
+            # 0 ... the leftmost tick fed to predict
             # loop through the day, ignore the first sequence_length samples (this is a simplification!)
             for j in range(sequence_length, X_samples.shape[1]):
                 total_count += 1
 
-                # predict over the full X_samples array for comparison
-                predicted_output = model.predict(X_samples[:,j-sequence_length:j,:], batch_size=1, verbose = 2)
+                predicted_output = model.predict(X_samples[:,j-sequence_length:j,:], batch_size=1, verbose=2)
                 print("full:single: ", j, predicted_output_full[0,j-1-time_shift], predicted_output[0,sequence_length-1-time_shift])
 
                 # check whether the signals are identical
@@ -1390,20 +1389,22 @@ def test_look_ahead(model, sequence_length, X_pred, y_pred):
                     print("Error: MaxArg:", np.argmax(predicted_output_full[0,j-1-time_shift]), np.argmax(predicted_output[0,sequence_length-1-time_shift]))
                     # store the time-shifted prediction
                     predicted_output_upd[0,j-1-time_shift,:] = predicted_output[0,sequence_length-1-time_shift,:]
+
                     if p < 3:
                         p += 1
                         np.set_printoptions(threshold=np.nan)
                         print("First 3 Predictions")
                         print(predicted_output)
 
-        #test the result of the time-shifted prediction
-        pnl = check_prediction(X_pred.loc[date_idx], y_samples, predicted_output_upd, mean, std)
-        i+= 1
-        print (i,"Date: ",date_idx, "Errors/Total: ", error_count, "/", total_count, "New Pnl", pnl)          
+            #test the result of the time-shifted prediction
+            pnl = check_prediction(X_pred.loc[date_idx], y_samples, predicted_output_upd, mean, std)
+            i+= 1
+            print (i,"Date: ",date_idx, "Errors/Total: ", error_count, "/", total_count, "New Pnl", pnl)          
 
-        # only 3 days...
-        if i > 2:
-            break
+            # only 3 days...
+            if i > 2:
+                break
+
      # test_look_ahead() END
 
 #########################################################
