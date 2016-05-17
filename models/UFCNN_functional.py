@@ -21,6 +21,7 @@ from keras.models import model_from_json
 from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
 from keras.layers import TimeDistributed, Reshape
 from keras.layers.recurrent import LSTM
+from keras.layers.normalization import BatchNormalization
 
 from keras.callbacks import TensorBoard
 
@@ -336,6 +337,114 @@ def ufcnn_model_deconv(sequence_length=5000,
 
     print(model.summary())
     return model
+
+
+def ufcnn_model_deconv_bn(sequence_length=5000,
+                       features=4,
+                       nb_filter=150,
+                       filter_length=5,
+                       output_dim=1,
+                       optimizer='adagrad',
+                       loss='mse',
+                       regression = False,
+                       class_mode=None,
+                       activation="softplus",
+                       init="lecun_uniform"):
+    strides = [1, 2, 1]
+
+    def conv_transpose_block(input, nb_filter, filter_length, strides, init, postfix, padding='same'):
+        conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
+        relu = Activation(activation, name='relu1'+postfix)(conv)
+        bn = BatchNormalization(relu, name='bn'+postfix)
+        return bn
+
+    def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
+        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
+        relu = Activation(activation, name='relu1'+postfix)(conv)
+        bn = BatchNormalization(relu, name='bn'+postfix)
+        return bn
+
+    main_input = Input(name='input', shape=(None, features))
+
+    #########################################################
+
+    # input_padding = ZeroPadding1D(2, name='padding')(main_input)  # NOTE: removed in order to keep dimension, re-check. to avoid lookahead bias
+
+    #########################################################
+
+    # conv1 = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding='same', strides=strides, init=init, name='conv1')(main_input)
+    # relu1 = Activation(activation, name='relu1')(conv1)
+
+    H1 = conv_transpose_block(main_input, nb_filter=nb_filter, filter_length=filter_length, strides=strides, init=init, postfix='1')
+
+    #########################################################
+
+    # conv2 = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding='same', strides=strides, init=init, name='conv2')(relu1)
+    # relu2 = Activation(activation, name='relu2')(conv2)
+
+    H2 = conv_transpose_block(H1, nb_filter=nb_filter, filter_length=filter_length, strides=strides, init=init, postfix='2')
+
+    #########################################################
+
+    # conv3 = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding='same', strides=strides, init=init, name='conv3')(relu2)
+    # relu3 = Activation(activation, name='relu3')(conv3)
+
+    H3 = conv_transpose_block(H2, nb_filter=nb_filter, filter_length=filter_length, strides=strides, init=init, postfix='3')
+
+    #########################################################
+
+    # conv4 = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding='same', strides=strides, init=init, name='conv4')(relu3)
+    # relu4 = Activation(activation, name='relu4')(conv4)
+
+    H4 = conv_transpose_block(H3, nb_filter=nb_filter, filter_length=filter_length, strides=strides, init=init, postfix='4')
+
+    #########################################################
+
+    # conv5 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv5')(relu4)
+    # relu5 = Activation(activation, name='relu5')(conv5)
+
+    G4 = conv_block(H4, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='5')
+
+    #########################################################
+
+    merge6 = merge([H3, G4], mode='concat', name='merge6')
+    # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv6')(merge6)
+    # relu6 = Activation(activation, name='relu6')(conv6)
+    G3 = conv_block(merge6, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='6')
+
+    #########################################################
+
+    merge7 = merge([H2, G3], mode='concat', name='merge7')
+    # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv7')(merge7)
+    # relu7 = Activation(activation, name='relu7')(conv7)
+    G2 = conv_block(merge7, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='7')
+
+    #########################################################
+
+    merge8 = merge([H1, G2], mode='concat', name='merge8')
+    # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv8')(merge8)
+    # relu8 = Activation(activation, name='relu8')(conv8)
+    G1 = conv_block(merge8, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='8')
+
+    #########################################################
+    if regression:
+    #########################################################
+
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
+        output = conv9
+
+    else:
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
+        activation = Activation('softmax', name='activation')(conv9)
+        output = activation
+    #########################################################
+
+    model = Model(input=main_input, output=output)
+    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
+
+    print(model.summary())
+    return model
+
 
 
 def ufcnn_model_seq(sequence_length=5000,
