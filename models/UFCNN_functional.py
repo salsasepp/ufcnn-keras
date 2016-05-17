@@ -257,6 +257,100 @@ def ufcnn_model_concat(sequence_length=5000,
     return model
 
 
+def ufcnn_model_concat_bn(sequence_length=5000,
+                           features=1,
+                           nb_filter=150,
+                           filter_length=5,
+                           output_dim=1,
+                           optimizer='adagrad',
+                           loss='mse',
+                           regression = True,
+                           class_mode=None,
+                           activation="softplus",
+                           init="lecun_uniform",
+                           batch_norm=False):
+    def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
+        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
+        relu = Activation(activation, name='relu1'+postfix)(conv)
+        if batch_norm:
+            y = BatchNormalization(relu, name='bn'+postfix)
+        else:
+            y = relu
+        return y
+
+    main_input = Input(name='input', shape=(None, features))
+
+    #########################################################
+
+    input_padding = ZeroPadding1D(2)(main_input)  # to avoid lookahead bias
+
+    #########################################################
+
+    # conv1 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init)(input_padding)
+    # relu1 = Activation(activation)(conv1)
+    H1 = conv_block(input_padding, nb_filter, filter_length, init, postfix='1', border_mode='valid', subsample_length=1)
+
+    #########################################################
+
+    # conv2 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu1)
+    # relu2 = Activation(activation)(conv2)
+    H2 = conv_block(H1, nb_filter, filter_length, init, postfix='2', subsample_length=1)
+
+    #########################################################
+
+    # conv3 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu2)
+    # relu3 = Activation(activation)(conv3)
+    H3 = conv_block(H2, nb_filter, filter_length, init, postfix='3', subsample_length=1)
+
+    #########################################################
+
+    # conv4 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu3)
+    # relu4 = Activation(activation)(conv4)
+    H4 = conv_block(H3, nb_filter, filter_length, init, postfix='4', subsample_length=1)
+
+    #########################################################
+
+    # conv5 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu4)
+    # relu5 = Activation(activation)(conv5)
+    G4 = conv_block(H4, nb_filter, filter_length, init, postfix='5', subsample_length=1)
+
+    #########################################################
+
+    merge6 = merge([H3, G4], mode='concat')
+    # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge6)
+    # relu6 = Activation(activation)(conv6)
+    G3 = conv_block(merge6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
+
+    #########################################################
+
+    merge7 = merge([H2, G3], mode='concat')
+    # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge7)
+    # relu7 = Activation(activation)(conv7)
+    G2 = conv_block(merge7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
+
+    #########################################################
+
+    merge8 = merge([H1, G2], mode='concat')
+    # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
+    # relu8 = Activation(activation)(conv8)
+    G1 = conv_block(merge8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
+
+    #########################################################
+    if regression:
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        output = conv9
+    else:
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        activation = (Activation('softmax'))(conv9)
+        output = activation
+
+    model = Model(input=main_input, output=output)
+    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
+
+    print(model.summary())
+    return model
+
+
 def ufcnn_model_deconv(sequence_length=5000,
                        features=4,
                        nb_filter=150,
@@ -349,20 +443,27 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
                        regression = False,
                        class_mode=None,
                        activation="softplus",
-                       init="lecun_uniform"):
+                       init="lecun_uniform",
+                       batch_norm=False):
     strides = [1, 2, 1]
 
     def conv_transpose_block(input, nb_filter, filter_length, strides, init, postfix, padding='same'):
         conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
-        bn = BatchNormalization(relu, name='bn'+postfix)
-        return bn
+        if batch_norm:
+            y = BatchNormalization(relu, name='bn'+postfix)
+        else:
+            y = relu
+        return y
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
-        bn = BatchNormalization(relu, name='bn'+postfix)
-        return bn
+        if batch_norm:
+            y = BatchNormalization(relu, name='bn'+postfix)
+        else:
+            y = relu
+        return y
 
     main_input = Input(name='input', shape=(None, features))
 
