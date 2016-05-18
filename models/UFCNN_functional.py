@@ -257,7 +257,7 @@ def ufcnn_model_concat(sequence_length=5000,
     return model
 
 
-def ufcnn_model_concat_bn(sequence_length=5000,
+def ufcnn_model_concat_bn(sequence_length=5,
                            features=1,
                            nb_filter=150,
                            filter_length=5,
@@ -271,7 +271,7 @@ def ufcnn_model_concat_bn(sequence_length=5000,
                            batch_norm=False):
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
-        relu = Activation(activation, name='relu1'+postfix)(conv)
+        relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
         else:
@@ -337,10 +337,10 @@ def ufcnn_model_concat_bn(sequence_length=5000,
 
     #########################################################
     if regression:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
         output = conv9
     else:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
         activation = (Activation('softmax'))(conv9)
         output = activation
 
@@ -433,7 +433,7 @@ def ufcnn_model_deconv(sequence_length=5000,
     return model
 
 
-def ufcnn_model_deconv_bn(sequence_length=5000,
+def ufcnn_model_deconv_bn(sequence_length=5,
                        features=4,
                        nb_filter=150,
                        filter_length=5,
@@ -449,7 +449,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
 
     def conv_transpose_block(input, nb_filter, filter_length, strides, init, postfix, padding='same'):
         conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
-        relu = Activation(activation, name='relu1'+postfix)(conv)
+        relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
         else:
@@ -458,7 +458,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
-        relu = Activation(activation, name='relu1'+postfix)(conv)
+        relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
         else:
