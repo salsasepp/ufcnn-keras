@@ -273,7 +273,7 @@ def ufcnn_model_concat_bn(sequence_length=5000,
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -337,10 +337,10 @@ def ufcnn_model_concat_bn(sequence_length=5000,
 
     #########################################################
     if regression:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
         output = conv9
     else:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
         activation = (Activation('softmax'))(conv9)
         output = activation
 
@@ -451,7 +451,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
         conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -460,7 +460,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -1776,8 +1776,8 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        model = ufcnn_model_lstm(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
+        model = ufcnn_model_concat_bn(regression = False, output_dim=3, features=len(features_list), 
+                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop , batch_norm = True)
         
     print_nodes_shapes(model)
 
