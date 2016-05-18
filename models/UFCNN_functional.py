@@ -273,7 +273,7 @@ def ufcnn_model_concat_bn(sequence_length=5000,
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -337,10 +337,10 @@ def ufcnn_model_concat_bn(sequence_length=5000,
 
     #########################################################
     if regression:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
         output = conv9
     else:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(G1)
         activation = (Activation('softmax'))(conv9)
         output = activation
 
@@ -451,7 +451,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
         conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -460,7 +460,7 @@ def ufcnn_model_deconv_bn(sequence_length=5000,
         conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu1'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(relu, name='bn'+postfix)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -1732,9 +1732,9 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 1 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 1
-    testing_count = 1
+    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 36
     sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
@@ -1793,8 +1793,8 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        model = ufcnn_model_lstm(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop )
+        model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
+                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop, batch_norm=True)
         
     print_nodes_shapes(model)
 
@@ -1812,7 +1812,7 @@ if action == 'tradcom_simple':
 
     start_time = time.time()
     epoch = 90
-    use_lstm = True
+    use_lstm = False
     if use_lstm:
         history = model.fit_generator(lstm_generator(X, y, sequence_length),
                       samples_per_epoch=get_lstm_samples(X, y, sequence_length),
@@ -1876,6 +1876,6 @@ if action == 'tradcom_simple':
     print ("Average PnL: ", pnl/i)
     # Test how big the future bias would be and how big the differences / PnL would be
     test_future_bias = True
-    #test_future_bias = False
+    test_future_bias = False
     if test_future_bias:
         test_look_ahead(model, sequence_length, X_pred, y_pred)
