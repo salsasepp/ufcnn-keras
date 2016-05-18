@@ -1776,8 +1776,8 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        model = ufcnn_model_concat_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop , batch_norm = True)
+        model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
+                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop, batch_norm=True)
         
     print_nodes_shapes(model)
 
