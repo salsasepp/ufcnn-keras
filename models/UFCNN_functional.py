@@ -1859,6 +1859,6 @@ if action == 'tradcom_simple':
     print ("Average PnL: ", pnl/i)
     # Test how big the future bias would be and how big the differences / PnL would be
     test_future_bias = True
-    #test_future_bias = False
+    test_future_bias = False
     if test_future_bias:
         test_look_ahead(model, sequence_length, X_pred, y_pred)
