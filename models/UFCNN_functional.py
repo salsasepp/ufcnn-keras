@@ -979,7 +979,8 @@ def prepare_tradcom_classification(training=True,
     return (X,y,mean,std)
 
 
-def generator(X, y):
+def generator(X, y, batch_length=None):
+    import numbers
     print("Call to generator")
     print(X.index.equals(y.index))
     c = 1
@@ -987,16 +988,32 @@ def generator(X, y):
     #dates = X.index.get_level_values(0).unique()
     
     while True:
+    #for i in range(0, 2): # for debug
         for date_idx in X.index.get_level_values(0).unique():
             #print(date_idx)
             #print(X.loc[date_idx].shape)
             #print(y.loc[date_idx].shape)
-            X_array = X.loc[date_idx].values
-            y_array = y.loc[date_idx].values
-            X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
-            y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-            #yield {'input': X_samples, 'output': y_samples}
-            yield (X_samples, y_samples)
+            if not batch_length:
+                X_array = X.loc[date_idx].values
+                y_array = y.loc[date_idx].values
+                X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+                y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+                #yield {'input': X_samples, 'output': y_samples}
+                yield (X_samples, y_samples)
+            else:
+                assert isinstance(batch_length, numbers.Integral), "batch_length is not an integer"
+                for idx in range(0, X.loc[date_idx].shape[0], batch_length):
+                    print(idx)
+                    if idx + batch_length <= X.loc[date_idx].shape[0]:
+                        X_array = X.loc[date_idx].values[idx:idx+batch_length]
+                        y_array = y.loc[date_idx].values[idx:idx+batch_length]
+                    else:
+                        X_array = X.loc[date_idx].values[idx:]
+                        y_array = y.loc[date_idx].values[idx:]
+                    X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+                    y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+                    yield (X_samples, y_samples)
+
 
 def get_lstm_samples(Xdf, ydf, sequence_length = 5000):
     nsamples = 0
