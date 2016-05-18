@@ -1795,7 +1795,7 @@ if action == 'tradcom_simple':
 
     start_time = time.time()
     epoch = 90
-    use_lstm = True
+    use_lstm = False
     if use_lstm:
         history = model.fit_generator(lstm_generator(X, y, sequence_length),
                       samples_per_epoch=get_lstm_samples(X, y, sequence_length),
