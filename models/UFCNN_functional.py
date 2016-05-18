@@ -1715,9 +1715,9 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 1 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 1
-    testing_count = 1
+    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 36
     sequence_length = 500
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
