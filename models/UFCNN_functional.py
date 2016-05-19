@@ -1736,6 +1736,7 @@ if action == 'tradcom_simple':
     validation_count = 2
     testing_count = 36
     sequence_length = 500
+    final_layer_filter_length = 5
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
@@ -1794,7 +1795,7 @@ if action == 'tradcom_simple':
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
         model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop, batch_norm=True)
+                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=rmsprop, batch_norm=True)
         
     print_nodes_shapes(model)
 
