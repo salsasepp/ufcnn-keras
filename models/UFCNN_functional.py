@@ -22,6 +22,7 @@ from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D
 from keras.layers import TimeDistributed, Reshape
 from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
+from keras.regularizers import l2, l1, l1l2, activity_l1, activity_l1l2, activity_l2
 
 from keras.callbacks import TensorBoard
 
@@ -267,10 +268,17 @@ def ufcnn_model_concat_bn(sequence_length=5,
                            regression = True,
                            class_mode=None,
                            activation="softplus",
+                           W_regularizer=None,
                            init="lecun_uniform",
                            batch_norm=False):
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
-        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
+        conv = Convolution1D(nb_filter=nb_filter,
+                             filter_length=filter_length,
+                             border_mode=border_mode,
+                             subsample_length=subsample_length,
+                             W_regularizer=W_regularizer,
+                             init=init,
+                             name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
@@ -337,10 +345,18 @@ def ufcnn_model_concat_bn(sequence_length=5,
 
     #########################################################
     if regression:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim,
+                              filter_length=sequence_length,
+                              border_mode='same',
+                              W_regularizer=W_regularizer,
+                              init=init)(G1)
         output = conv9
     else:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim,
+                              filter_length=sequence_length,
+                              border_mode='same',
+                              W_regularizer=W_regularizer,
+                              init=init)(G1)
         activation = (Activation('softmax'))(conv9)
         output = activation
 
@@ -443,12 +459,19 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                        regression = False,
                        class_mode=None,
                        activation="softplus",
+                       W_regularizer=None,
                        init="lecun_uniform",
                        batch_norm=False):
     strides = [1, 2, 1]
 
     def conv_transpose_block(input, nb_filter, filter_length, strides, init, postfix, padding='same'):
-        conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
+        conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter,
+                                                 filter_length=filter_length,
+                                                 padding=padding,
+                                                 strides=strides,
+                                                 W_regularizer=W_regularizer,
+                                                 init=init,
+                                                 name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
@@ -457,7 +480,13 @@ def ufcnn_model_deconv_bn(sequence_length=5,
         return y
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
-        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
+        conv = Convolution1D(nb_filter=nb_filter,
+                             filter_length=filter_length,
+                             border_mode=border_mode,
+                             subsample_length=subsample_length,
+                             W_regularizer=W_regularizer,
+                             init=init,
+                             name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
             y = BatchNormalization(name='bn'+postfix)(relu)
@@ -531,11 +560,21 @@ def ufcnn_model_deconv_bn(sequence_length=5,
     if regression:
     #########################################################
 
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
+        conv9 = Convolution1D(nb_filter=output_dim,
+                              filter_length=sequence_length,
+                              border_mode='same',
+                              W_regularizer=W_regularizer,
+                              init=init,
+                              name='conv9')(G1)
         output = conv9
 
     else:
-        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
+        conv9 = Convolution1D(nb_filter=output_dim,
+                              filter_length=sequence_length,
+                              border_mode='same',
+                              W_regularizer=W_regularizer,
+                              init=init,
+                              name='conv9')(G1)
         activation = Activation('softmax', name='activation')(conv9)
         output = activation
     #########################################################
@@ -983,14 +1022,18 @@ def generator(X, y, batch_length=None):
     import numbers
     print("Call to generator")
     print(X.index.equals(y.index))
-    c = 1
+    c = 0
+    stop_count = 250
     
     #dates = X.index.get_level_values(0).unique()
     
     while True:
-    #for i in range(0, 2): # for debug
+    # for i in range(0, 250): # for debug
         for date_idx in X.index.get_level_values(0).unique():
-            #print(date_idx)
+            #if c >= stop_count:         # for DEBUG
+            #    break                   # for DEBUG
+
+            # print(date_idx)   # for DEBUG
             #print(X.loc[date_idx].shape)
             #print(y.loc[date_idx].shape)
             if not batch_length:
@@ -1003,7 +1046,7 @@ def generator(X, y, batch_length=None):
             else:
                 assert isinstance(batch_length, numbers.Integral), "batch_length is not an integer"
                 for idx in range(0, X.loc[date_idx].shape[0], batch_length):
-                    print(idx)
+                    # print(idx)    # for DEBUG
                     if idx + batch_length <= X.loc[date_idx].shape[0]:
                         X_array = X.loc[date_idx].values[idx:idx+batch_length]
                         y_array = y.loc[date_idx].values[idx:idx+batch_length]
@@ -1012,6 +1055,9 @@ def generator(X, y, batch_length=None):
                         y_array = y.loc[date_idx].values[idx:]
                     X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
                     y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+                    c += 1
+                    # print("Yielding {}th value".format(c))
+                    # print(X_samples[0, 0, :])     # for DEBUG
                     yield (X_samples, y_samples)
 
 
@@ -1732,10 +1778,10 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 2
-    testing_count = 36
-    sequence_length = 500
+    training_count = 25 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 5
+    testing_count = 5
+    sequence_length = 5000 # NB: Now used for slicing input data too! Use = None for no slicing TODO: test
     final_layer_filter_length = 5
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
@@ -1774,6 +1820,9 @@ if action == 'tradcom_simple':
     print("X shape: ", X.shape)
     # print(X)
     print("Y shape: ", y.shape)
+
+    total_data_length = X.shape[0]
+    print(total_data_length)
     #
     # print("Mean")
     # print(mean)
@@ -1783,10 +1832,11 @@ if action == 'tradcom_simple':
     #for _d in generator(X, y):
     #    print(_d)
 
-    sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.0001, decay=1e-3, momentum=0.9, nesterov=True)
     rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
     #rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
 
+    regularizer = l2(0.1)
 
     # load the model from disk if model name is given...
     loss="categorical_crossentropy"
@@ -1795,7 +1845,7 @@ if action == 'tradcom_simple':
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
         model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=rmsprop, batch_norm=True)
+                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=sgd, W_regularizer=regularizer, batch_norm=True)
         
     print_nodes_shapes(model)
 
@@ -1814,6 +1864,7 @@ if action == 'tradcom_simple':
     start_time = time.time()
     epoch = 90
     use_lstm = False
+
     if use_lstm:
         history = model.fit_generator(lstm_generator(X, y, sequence_length),
                       samples_per_epoch=get_lstm_samples(X, y, sequence_length),
@@ -1823,14 +1874,13 @@ if action == 'tradcom_simple':
                       #nb_val_samples=validation_count,
                       callbacks=callbacks)
     else:
-        history = model.fit_generator(generator(X, y),
-                      samples_per_epoch=training_count,
+        history = model.fit_generator(generator(X, y, sequence_length),
+                      samples_per_epoch=total_data_length // sequence_length + 1,
                       verbose=1,
                       nb_epoch=epoch,
-                      validation_data=generator(X_val, y_val),
-                      nb_val_samples=validation_count,
+                      validation_data=generator(X_val, y_val, sequence_length),
+                      nb_val_samples=validation_count * (total_data_length // (sequence_length * training_count) + 1),
                       callbacks=callbacks)
-
 
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
