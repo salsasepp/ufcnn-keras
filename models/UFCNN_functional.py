@@ -281,7 +281,7 @@ def ufcnn_model_concat_bn(sequence_length=5,
                              name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -474,7 +474,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                                                  name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -489,7 +489,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                              name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
