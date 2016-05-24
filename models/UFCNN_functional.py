@@ -281,7 +281,7 @@ def ufcnn_model_concat_bn(sequence_length=5,
                              name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -474,7 +474,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                                                  name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -489,7 +489,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                              name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -1836,7 +1836,7 @@ if action == 'tradcom_simple':
     rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
     #rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
 
-    regularizer = l2(0.1)
+    regularizer = None # l2(0.1)
 
     # load the model from disk if model name is given...
     loss="categorical_crossentropy"
@@ -1862,7 +1862,7 @@ if action == 'tradcom_simple':
         callbacks = []
 
     start_time = time.time()
-    epoch = 90
+    epoch = 30
     use_lstm = False
 
     if use_lstm:
