@@ -325,23 +325,26 @@ def ufcnn_model_concat_bn(sequence_length=5,
     #########################################################
 
     merge6 = merge([H3, G4], mode='concat')
+    bn6 = BatchNormalization()(merge6)
     # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge6)
     # relu6 = Activation(activation)(conv6)
-    G3 = conv_block(merge6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
+    G3 = conv_block(bn6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
 
     #########################################################
 
     merge7 = merge([H2, G3], mode='concat')
+    bn7 = BatchNormalization()(merge7)
     # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge7)
     # relu7 = Activation(activation)(conv7)
-    G2 = conv_block(merge7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
+    G2 = conv_block(bn7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
 
     #########################################################
 
     merge8 = merge([H1, G2], mode='concat')
+    bn8 = BatchNormalization()(merge8)
     # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
     # relu8 = Activation(activation)(conv8)
-    G1 = conv_block(merge8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
+    G1 = conv_block(bn8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
 
     #########################################################
     if regression:
@@ -472,12 +475,13 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                                                  W_regularizer=W_regularizer,
                                                  init=init,
                                                  name='conv_trans'+postfix)(input)
-        relu = Activation(activation, name='relu'+postfix)(conv)
+        # relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            bn = BatchNormalization()(conv)
+            relu = Activation(activation, name='relu'+postfix)(bn)
         else:
-            y = relu
-        return y
+            relu = Activation(activation, name='relu'+postfix)(conv)
+        return relu
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter,
@@ -487,12 +491,13 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                              W_regularizer=W_regularizer,
                              init=init,
                              name='conv'+postfix)(input)
-        relu = Activation(activation, name='relu'+postfix)(conv)
+        # relu = Activation(activation, name='relu'+postfix)(conv)        
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            bn = BatchNormalization()(conv)
+            relu = Activation(activation, name='relu'+postfix)(bn)
         else:
-            y = relu
-        return y
+            relu = Activation(activation, name='relu'+postfix)(conv)
+        return relu
 
     main_input = Input(name='input', shape=(None, features))
 
@@ -538,23 +543,26 @@ def ufcnn_model_deconv_bn(sequence_length=5,
     #########################################################
 
     merge6 = merge([H3, G4], mode='concat', name='merge6')
+    bn6 = BatchNormalization()(merge6)
     # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv6')(merge6)
     # relu6 = Activation(activation, name='relu6')(conv6)
-    G3 = conv_block(merge6, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='6')
+    G3 = conv_block(bn6, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='6')
 
     #########################################################
 
     merge7 = merge([H2, G3], mode='concat', name='merge7')
+    bn7 = BatchNormalization()(merge7)
     # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv7')(merge7)
     # relu7 = Activation(activation, name='relu7')(conv7)
-    G2 = conv_block(merge7, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='7')
+    G2 = conv_block(bn7, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='7')
 
     #########################################################
 
     merge8 = merge([H1, G2], mode='concat', name='merge8')
+    bn8 = BatchNormalization()(merge8)
     # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv8')(merge8)
     # relu8 = Activation(activation, name='relu8')(conv8)
-    G1 = conv_block(merge8, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='8')
+    G1 = conv_block(bn8, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='8')
 
     #########################################################
     if regression:
@@ -1845,7 +1853,7 @@ if action == 'tradcom_simple':
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
         model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=sgd, W_regularizer=regularizer, batch_norm=True)
+                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=sgd, W_regularizer=regularizer, batch_norm=False)
         
     print_nodes_shapes(model)
 
@@ -1862,7 +1870,7 @@ if action == 'tradcom_simple':
         callbacks = []
 
     start_time = time.time()
-    epoch = 30
+    epoch = 180
     use_lstm = False
 
     if use_lstm:
