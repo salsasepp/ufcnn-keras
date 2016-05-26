@@ -281,7 +281,7 @@ def ufcnn_model_concat_bn(sequence_length=5,
                              name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=1, name='bn'+postfix)(relu)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -475,13 +475,12 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                                                  W_regularizer=W_regularizer,
                                                  init=init,
                                                  name='conv_trans'+postfix)(input)
-        # relu = Activation(activation, name='relu'+postfix)(conv)
+        relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            bn = BatchNormalization()(conv)
-            relu = Activation(activation, name='relu'+postfix)(bn)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
-            relu = Activation(activation, name='relu'+postfix)(conv)
-        return relu
+            y = relu
+        return y
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter,
@@ -491,13 +490,16 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                              W_regularizer=W_regularizer,
                              init=init,
                              name='conv'+postfix)(input)
-        # relu = Activation(activation, name='relu'+postfix)(conv)        
+        relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            bn = BatchNormalization()(conv)
-            relu = Activation(activation, name='relu'+postfix)(bn)
+            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
-            relu = Activation(activation, name='relu'+postfix)(conv)
-        return relu
+            y = relu
+        return y
+
+    main_input = Input(name='input', shape=(None, features))
+
+    #########################################################
 
     main_input = Input(name='input', shape=(None, features))
 
@@ -1870,7 +1872,7 @@ if action == 'tradcom_simple':
         callbacks = []
 
     start_time = time.time()
-    epoch = 180
+    epoch = 30
     use_lstm = False
 
     if use_lstm:
