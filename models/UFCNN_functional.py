@@ -18,13 +18,13 @@ from keras.utils import np_utils
 from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
-from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D
+from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D, Dropout
 from keras.layers import TimeDistributed, Reshape
 from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2, l1, l1l2, activity_l1, activity_l1l2, activity_l2
 
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, ModelCheckpoint
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -463,6 +463,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                        class_mode=None,
                        activation="softplus",
                        W_regularizer=None,
+                       dropout_p=0.0,
                        init="lecun_uniform",
                        batch_norm=False):
     strides = [1, 2, 1]
@@ -480,7 +481,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
             y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
-        return y
+        return Dropout(dropout_p)(y)
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
         conv = Convolution1D(nb_filter=nb_filter,
@@ -495,7 +496,7 @@ def ufcnn_model_deconv_bn(sequence_length=5,
             y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
         else:
             y = relu
-        return y
+        return Dropout(dropout_p)(y)
 
     main_input = Input(name='input', shape=(None, features))
 
@@ -1843,10 +1844,10 @@ if action == 'tradcom_simple':
     #    print(_d)
 
     sgd = SGD(lr=0.0001, decay=1e-3, momentum=0.9, nesterov=True)
-    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
+    rmsprop = RMSprop (lr=0.00005, rho=0.9, epsilon=1e-06)  # for sequence length 500
     #rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
 
-    regularizer = None # l2(0.1)
+    regularizer = l1l2(l1=0.1, l2=0.1) # l2(0.1)
 
     # load the model from disk if model name is given...
     loss="categorical_crossentropy"
@@ -1855,7 +1856,7 @@ if action == 'tradcom_simple':
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
         model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=sgd, W_regularizer=regularizer, batch_norm=False)
+                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=rmsprop, W_regularizer=regularizer, dropout_p=0.5, batch_norm=False)
         
     print_nodes_shapes(model)
 
@@ -1865,14 +1866,15 @@ if action == 'tradcom_simple':
     #                 nb_epoch=5,
     #                 shuffle=False,
     #                 batch_size=1)
-
+    weights_filepath = './weights/deconv_bn-merge_drop_RMS-0.00005.hdf5'
+    model_chk = ModelCheckpoint(weights_filepath, monitor='val_acc', verbose=1, save_best_only=True)
     if K._config['backend'] != 'theano':
-        callbacks = [TensorBoard(), ]
+        callbacks = [TensorBoard(), model_chk]
     else:
-        callbacks = []
+        callbacks = [model_chk]
 
     start_time = time.time()
-    epoch = 30
+    epoch = 90
     use_lstm = False
 
     if use_lstm:
@@ -1896,6 +1898,8 @@ if action == 'tradcom_simple':
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
     save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
+    model.load_weights(weights_filepath)
+    print("Loaded best weights")
 
     if not simulation:
         # and get the files for testing
