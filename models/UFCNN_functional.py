@@ -12,19 +12,20 @@ import datetime
 import re
 
 from keras import backend as K
+from theano import tensor as T
+
 from keras.preprocessing import sequence
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.utils import np_utils
 from keras.models import Sequential, Graph, Model
 from keras.models import model_from_json
 
-from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D, Dropout
+from keras.layers import Input, merge, Flatten, Dense, Activation, Convolution1D, ZeroPadding1D, Lambda
 from keras.layers import TimeDistributed, Reshape
 from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
-from keras.regularizers import l2, l1, l1l2, activity_l1, activity_l1l2, activity_l2
 
-from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.callbacks import TensorBoard
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -98,8 +99,14 @@ def load_neuralnet(model_name):
 
     try:
         model = model_from_json(open(arch_name).read(),{'Convolution1D_Transpose_Arbitrary':Convolution1D_Transpose_Arbitrary})
-    except NameError: # are we on Theano?
-        model = model_from_json(open(arch_name).read())
+    except NameError:
+        try:
+            model = model_from_json(open(arch_name).read())
+        except:
+            # Hack to make it work with the Lambda function - a bug in Keras or a problem with T.roll
+            rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
+            loss="categorical_crossentropy"
+            model = ufcnn_model_concat_shift(regression = False, output_dim=3, features=32, loss=loss, sequence_length=499, optimizer=rmsprop)
 
     model.load_weights(weight_name)
     return model
@@ -257,7 +264,6 @@ def ufcnn_model_concat(sequence_length=5000,
     print(model.summary())
     return model
 
-
 def ufcnn_model_concat_bn(sequence_length=5,
                            features=1,
                            nb_filter=150,
@@ -268,20 +274,13 @@ def ufcnn_model_concat_bn(sequence_length=5,
                            regression = True,
                            class_mode=None,
                            activation="softplus",
-                           W_regularizer=None,
                            init="lecun_uniform",
                            batch_norm=False):
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
-        conv = Convolution1D(nb_filter=nb_filter,
-                             filter_length=filter_length,
-                             border_mode=border_mode,
-                             subsample_length=subsample_length,
-                             W_regularizer=W_regularizer,
-                             init=init,
-                             name='conv'+postfix)(input)
+        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
         return y
@@ -325,43 +324,136 @@ def ufcnn_model_concat_bn(sequence_length=5,
     #########################################################
 
     merge6 = merge([H3, G4], mode='concat')
-    bn6 = BatchNormalization()(merge6)
     # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge6)
     # relu6 = Activation(activation)(conv6)
-    G3 = conv_block(bn6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
+    G3 = conv_block(merge6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
 
     #########################################################
 
     merge7 = merge([H2, G3], mode='concat')
-    bn7 = BatchNormalization()(merge7)
     # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge7)
     # relu7 = Activation(activation)(conv7)
-    G2 = conv_block(bn7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
+    G2 = conv_block(merge7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
 
     #########################################################
 
     merge8 = merge([H1, G2], mode='concat')
-    bn8 = BatchNormalization()(merge8)
     # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
     # relu8 = Activation(activation)(conv8)
-    G1 = conv_block(bn8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
+    G1 = conv_block(merge8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
 
     #########################################################
     if regression:
-        conv9 = Convolution1D(nb_filter=output_dim,
-                              filter_length=sequence_length,
-                              border_mode='same',
-                              W_regularizer=W_regularizer,
-                              init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
         output = conv9
     else:
-        conv9 = Convolution1D(nb_filter=output_dim,
-                              filter_length=sequence_length,
-                              border_mode='same',
-                              W_regularizer=W_regularizer,
-                              init=init)(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
         activation = (Activation('softmax'))(conv9)
         output = activation
+
+    model = Model(input=main_input, output=output)
+    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
+
+    print(model.summary())
+    return model
+
+
+def ufcnn_model_concat_shift(sequence_length=5,
+                           features=1,
+                           nb_filter=150,
+                           filter_length=5,
+                           output_dim=1,
+                           optimizer='adagrad',
+                           loss='mse',
+                           regression = True,
+                           class_mode=None,
+                           activation="softplus",
+                           init="lecun_uniform",
+                           shift_layer=True):
+
+    def conv_block(inputlayer, nb_filter, filter_length, init, postfix, border_mode='valid', subsample_length=2, activation='softplus'):
+
+        if border_mode == 'valid':
+            shift_size = (filter_length-1) // 2
+            zeropad = ZeroPadding1D(shift_size)(inputlayer)
+            if shift_layer:
+                y = Lambda(lambda x: T.roll(x, shift_size, axis=1))(zeropad)
+            else:
+                y = zeropad
+        else:
+            y = inputlayer
+
+        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(y)
+        relu = Activation(activation, name='relu'+postfix)(conv)
+
+        return relu
+
+    main_input = Input(name='input', shape=(None, features))
+
+    #########################################################
+
+    #input_padding = ZeroPadding1D(2)(main_input)  # to avoid lookahead bias
+
+    #########################################################
+
+    # conv1 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='valid', init=init)(input_padding)
+    # relu1 = Activation(activation)(conv1)
+    H1 = conv_block(main_input, nb_filter, filter_length, init, postfix='1', subsample_length=1)
+
+    #########################################################
+
+    # conv2 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu1)
+    # relu2 = Activation(activation)(conv2)
+    H2 = conv_block(H1, nb_filter, filter_length, init, postfix='2', subsample_length=1)
+
+    #########################################################
+
+    # conv3 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu2)
+    # relu3 = Activation(activation)(conv3)
+    H3 = conv_block(H2, nb_filter, filter_length, init, postfix='3', subsample_length=1)
+
+    #########################################################
+
+    # conv4 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu3)
+    # relu4 = Activation(activation)(conv4)
+    H4 = conv_block(H3, nb_filter, filter_length, init, postfix='4', subsample_length=1)
+
+    #########################################################
+
+    # conv5 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(relu4)
+    # relu5 = Activation(activation)(conv5)
+    G4 = conv_block(H4, nb_filter, filter_length, init, postfix='5', subsample_length=1)
+
+    #########################################################
+
+    merge6 = merge([H3, G4], mode='concat')
+    # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge6)
+    # relu6 = Activation(activation)(conv6)
+    G3 = conv_block(merge6, nb_filter, filter_length, init, postfix='6', subsample_length=1)
+
+    #########################################################
+
+    merge7 = merge([H2, G3], mode='concat')
+    # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge7)
+    # relu7 = Activation(activation)(conv7)
+    G2 = conv_block(merge7, nb_filter, filter_length, init, postfix='7', subsample_length=1)
+
+    #########################################################
+
+    merge8 = merge([H1, G2], mode='concat')
+    # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
+    # relu8 = Activation(activation)(conv8)
+    G1 = conv_block(merge8, nb_filter, filter_length, init, postfix='8', subsample_length=1)
+
+    #########################################################
+    if regression:
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init)(G1)
+        output = conv9
+    else:
+        #conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, init=init)(G1)
+        conv9 = conv_block(G1,output_dim, sequence_length, init, postfix='9', subsample_length=1, activation='softmax')
+        #activation = (Activation('softmax'))(conv9)
+        output = conv9
 
     model = Model(input=main_input, output=output)
     model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', ])
@@ -462,45 +554,27 @@ def ufcnn_model_deconv_bn(sequence_length=5,
                        regression = False,
                        class_mode=None,
                        activation="softplus",
-                       W_regularizer=None,
-                       dropout_p=0.0,
                        init="lecun_uniform",
                        batch_norm=False):
     strides = [1, 2, 1]
 
     def conv_transpose_block(input, nb_filter, filter_length, strides, init, postfix, padding='same'):
-        conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter,
-                                                 filter_length=filter_length,
-                                                 padding=padding,
-                                                 strides=strides,
-                                                 W_regularizer=W_regularizer,
-                                                 init=init,
-                                                 name='conv_trans'+postfix)(input)
+        conv = Convolution1D_Transpose_Arbitrary(nb_filter=nb_filter, filter_length=filter_length, padding=padding, strides=strides, init=init, name='conv_trans'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
-        return Dropout(dropout_p)(y)
+        return y
 
     def conv_block(input, nb_filter, filter_length, init, postfix, border_mode='same', subsample_length=2):
-        conv = Convolution1D(nb_filter=nb_filter,
-                             filter_length=filter_length,
-                             border_mode=border_mode,
-                             subsample_length=subsample_length,
-                             W_regularizer=W_regularizer,
-                             init=init,
-                             name='conv'+postfix)(input)
+        conv = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode=border_mode, subsample_length=subsample_length, init=init, name='conv'+postfix)(input)
         relu = Activation(activation, name='relu'+postfix)(conv)
         if batch_norm:
-            y = BatchNormalization(mode=0, axis=2, name='bn'+postfix)(relu)
+            y = BatchNormalization(name='bn'+postfix)(relu)
         else:
             y = relu
-        return Dropout(dropout_p)(y)
-
-    main_input = Input(name='input', shape=(None, features))
-
-    #########################################################
+        return y
 
     main_input = Input(name='input', shape=(None, features))
 
@@ -546,46 +620,33 @@ def ufcnn_model_deconv_bn(sequence_length=5,
     #########################################################
 
     merge6 = merge([H3, G4], mode='concat', name='merge6')
-    bn6 = BatchNormalization()(merge6)
     # conv6 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv6')(merge6)
     # relu6 = Activation(activation, name='relu6')(conv6)
-    G3 = conv_block(bn6, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='6')
+    G3 = conv_block(merge6, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='6')
 
     #########################################################
 
     merge7 = merge([H2, G3], mode='concat', name='merge7')
-    bn7 = BatchNormalization()(merge7)
     # conv7 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv7')(merge7)
     # relu7 = Activation(activation, name='relu7')(conv7)
-    G2 = conv_block(bn7, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='7')
+    G2 = conv_block(merge7, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='7')
 
     #########################################################
 
     merge8 = merge([H1, G2], mode='concat', name='merge8')
-    bn8 = BatchNormalization()(merge8)
     # conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', subsample_length=2, init=init, name='conv8')(merge8)
     # relu8 = Activation(activation, name='relu8')(conv8)
-    G1 = conv_block(bn8, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='8')
+    G1 = conv_block(merge8, nb_filter=nb_filter, filter_length=filter_length, init=init, postfix='8')
 
     #########################################################
     if regression:
     #########################################################
 
-        conv9 = Convolution1D(nb_filter=output_dim,
-                              filter_length=sequence_length,
-                              border_mode='same',
-                              W_regularizer=W_regularizer,
-                              init=init,
-                              name='conv9')(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
         output = conv9
 
     else:
-        conv9 = Convolution1D(nb_filter=output_dim,
-                              filter_length=sequence_length,
-                              border_mode='same',
-                              W_regularizer=W_regularizer,
-                              init=init,
-                              name='conv9')(G1)
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='same', init=init, name='conv9')(G1)
         activation = Activation('softmax', name='activation')(conv9)
         output = activation
     #########################################################
@@ -1029,35 +1090,40 @@ def prepare_tradcom_classification(training=True,
     return (X,y,mean,std)
 
 
-def generator(X, y, batch_length=None):
+def generator(X, y, sequence_length=0, batch_length=None):
     import numbers
     print("Call to generator")
     print(X.index.equals(y.index))
-    c = 0
-    stop_count = 250
+    c = 1
     
     #dates = X.index.get_level_values(0).unique()
     
     while True:
-    # for i in range(0, 250): # for debug
+    #for i in range(0, 2): # for debug
         for date_idx in X.index.get_level_values(0).unique():
-            #if c >= stop_count:         # for DEBUG
-            #    break                   # for DEBUG
-
-            # print(date_idx)   # for DEBUG
+            #print(date_idx)
             #print(X.loc[date_idx].shape)
             #print(y.loc[date_idx].shape)
             if not batch_length:
                 X_array = X.loc[date_idx].values
                 y_array = y.loc[date_idx].values
+                # Add hold at the edges for correct shifting compatible with the zero padding
+
                 X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+
+                #y_array_padded = np.pad(y_array,(sequence_length//2,sequence_length//2,0,0), mode='constant', constant_values=(0,))
+                #y_array_padded[0:sequence_length//2, 2] = 1
+                #y_array_padded[y_array_padded.shape[0]-sequence_length//2:, 2] = 1
+                #y_samples = y_array_padded.reshape((1, y_array_padded.shape[0], y_array_padded.shape[1]))
+
                 y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+
                 #yield {'input': X_samples, 'output': y_samples}
                 yield (X_samples, y_samples)
             else:
                 assert isinstance(batch_length, numbers.Integral), "batch_length is not an integer"
                 for idx in range(0, X.loc[date_idx].shape[0], batch_length):
-                    # print(idx)    # for DEBUG
+                    print(idx)
                     if idx + batch_length <= X.loc[date_idx].shape[0]:
                         X_array = X.loc[date_idx].values[idx:idx+batch_length]
                         y_array = y.loc[date_idx].values[idx:idx+batch_length]
@@ -1066,9 +1132,6 @@ def generator(X, y, batch_length=None):
                         y_array = y.loc[date_idx].values[idx:]
                     X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
                     y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-                    c += 1
-                    # print("Yielding {}th value".format(c))
-                    # print(X_samples[0, 0, :])     # for DEBUG
                     yield (X_samples, y_samples)
 
 
@@ -1637,7 +1700,8 @@ def test_look_ahead(model, sequence_length, X_pred, y_pred):
     #sequence_length = 5000
     
     time_shift = 3 # >= 0
-    shifts = [3,5,10,15,20,25,40]
+    shifts = [3,5,10,15,20,25,40,sequence_length//2]
+    #shifts = [sequence_length//2]
     for time_shift in shifts:
         print ("Timeshift for InvestedTics: ",time_shift)
         i=0
@@ -1789,11 +1853,11 @@ if action == 'tracking':
 
 if action == 'tradcom_simple':
     simulation = False # Use True for simulated cosine data, False - for data from files
-    training_count = 25 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
-    validation_count = 5
-    testing_count = 5
-    sequence_length = 5000 # NB: Now used for slicing input data too! Use = None for no slicing TODO: test
-    final_layer_filter_length = 5
+    training_count = 80 # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 36
+    sequence_length = 500
+    sequence_length = 499
 
     #features_list = list(range(0,2)) # list(range(2,6)) #list(range(1,33))
 
@@ -1831,9 +1895,6 @@ if action == 'tradcom_simple':
     print("X shape: ", X.shape)
     # print(X)
     print("Y shape: ", y.shape)
-
-    total_data_length = X.shape[0]
-    print(total_data_length)
     #
     # print("Mean")
     # print(mean)
@@ -1843,11 +1904,9 @@ if action == 'tradcom_simple':
     #for _d in generator(X, y):
     #    print(_d)
 
-    sgd = SGD(lr=0.0001, decay=1e-3, momentum=0.9, nesterov=True)
-    rmsprop = RMSprop (lr=0.00005, rho=0.9, epsilon=1e-06)  # for sequence length 500
+    sgd = SGD(lr=0.0001, decay=1e-6, momentum=0.9, nesterov=True)
+    rmsprop = RMSprop (lr=0.00001, rho=0.9, epsilon=1e-06)  # for sequence length 500
     #rmsprop = RMSprop (lr=0.000005, rho=0.9, epsilon=1e-06) # for sequence length 5000
-
-    regularizer = l1l2(l1=0.1, l2=0.1) # l2(0.1)
 
     # load the model from disk if model name is given...
     loss="categorical_crossentropy"
@@ -1855,8 +1914,8 @@ if action == 'tradcom_simple':
         model = load_neuralnet(model_name)
         model.compile(optimizer=rmsprop, loss=loss, metrics=['accuracy', ])
     else:
-        model = ufcnn_model_deconv_bn(regression = False, output_dim=3, features=len(features_list), 
-                                   loss=loss, sequence_length=final_layer_filter_length, optimizer=rmsprop, W_regularizer=regularizer, dropout_p=0.5, batch_norm=False)
+        model = ufcnn_model_concat_shift(regression = False, output_dim=3, features=len(features_list), 
+                                   loss=loss, sequence_length=sequence_length, optimizer=rmsprop)
         
     print_nodes_shapes(model)
 
@@ -1866,19 +1925,17 @@ if action == 'tradcom_simple':
     #                 nb_epoch=5,
     #                 shuffle=False,
     #                 batch_size=1)
-    weights_filepath = './weights/deconv_bn-merge_drop_RMS-0.00005.hdf5'
-    model_chk = ModelCheckpoint(weights_filepath, monitor='val_acc', verbose=1, save_best_only=True)
+
     if K._config['backend'] != 'theano':
-        callbacks = [TensorBoard(), model_chk]
+        callbacks = [TensorBoard(), ]
     else:
-        callbacks = [model_chk]
+        callbacks = []
 
     start_time = time.time()
-    epoch = 90
+    epoch = 100
     use_lstm = False
-
     if use_lstm:
-        history = model.fit_generator(lstm_generator(X, y, sequence_length),
+        history = model.fit_generator(lstm_generator(X, y, sequence_length=sequence_length),
                       samples_per_epoch=get_lstm_samples(X, y, sequence_length),
                       verbose=1,
                       nb_epoch=epoch,
@@ -1886,20 +1943,17 @@ if action == 'tradcom_simple':
                       #nb_val_samples=validation_count,
                       callbacks=callbacks)
     else:
-        history = model.fit_generator(generator(X, y, sequence_length),
-                      samples_per_epoch=total_data_length // sequence_length + 1,
+        history = model.fit_generator(generator(X, y, sequence_length=sequence_length),
+                      samples_per_epoch=training_count,
                       verbose=1,
                       nb_epoch=epoch,
-                      validation_data=generator(X_val, y_val, sequence_length),
-                      nb_val_samples=validation_count * (total_data_length // (sequence_length * training_count) + 1),
                       callbacks=callbacks)
+
 
     print(history.history)
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % ( (time.time() - start_time),(time.time() - start_time)/epoch))
 
     save_neuralnet (model, "ufcnn_sim") if simulation else save_neuralnet (model, "ufcnn_concat")
-    model.load_weights(weights_filepath)
-    print("Loaded best weights")
 
     if not simulation:
         # and get the files for testing
@@ -1928,6 +1982,7 @@ if action == 'tradcom_simple':
         X_array = X_pred.loc[date_idx].values
         y_array = y_pred.loc[date_idx].values
         X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+
         y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
         print(y_samples[0, 0:200, :])
 
