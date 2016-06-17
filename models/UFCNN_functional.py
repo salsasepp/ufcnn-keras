@@ -10,6 +10,7 @@ import os.path
 import time
 import datetime
 import re
+import tensorflow as tf
 
 from keras import backend as K
 from theano import tensor as T
@@ -26,6 +27,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
 
 from keras.callbacks import TensorBoard
+from ufcnn import construct_ufcnn
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -1999,3 +2001,63 @@ if action == 'tradcom_simple':
     test_future_bias = False
     if test_future_bias:
         test_look_ahead(model, sequence_length, X_pred, y_pred)
+
+if action == 'ufcnn':
+    simulation = True  # Use True for simulated cosine data, False - for data from files
+    training_count = 80  # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 36
+    sequence_length = 500
+    sequence_length = 499
+
+    features_list = list(range(0, 2))
+    print("Using simulated data for training...")
+    (X_train, y_train, mean, std) = get_simulation()
+    (X_val, y_val, mean_, std_) = get_simulation()
+    #
+    print("X shape: ", X_train.shape)
+    print("Y shape: ", y_train.shape)
+
+    X_train = X_train.values.reshape((1, 1, X_train.shape[0], X_train.shape[1]))
+    y_train = y_train.values.reshape((1, 1, y_train.shape[0], y_train.shape[1]))
+
+    X_val = X_val.values.reshape((1, 1, X_val.shape[0], X_val.shape[1]))
+    y_val = y_val.values.reshape((1, 1, y_val.shape[0], y_val.shape[1]))
+
+    print("X shape: ", X_train.shape)
+    print("Y shape: ", y_train.shape)
+
+    # Create the network.
+    x, y_hat, y, *_ = construct_ufcnn(n_inputs=2, n_outputs=3, n_levels=3, n_filters=100)
+
+    # Define the categorical crossentropy loss and RMSProp optimizer over it.
+    loss = tf.nn.softmax_cross_entropy_with_logits(y_hat, y, name=None)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+    train_step = optimizer.minimize(loss)
+
+    # Run several epochs of optimization.
+    sess = tf.Session()
+    sess.run(tf.initialize_all_variables())
+
+    for epoch in range(300):
+        if epoch % 5 == 0:
+            mse = sess.run(loss, feed_dict={x: X_val, y: y_val})
+            print("{:^7}{:^7.2f}".format(epoch, mse))
+        sess.run(train_step, feed_dict={x: X_train, y: y_train})
+
+
+    print("Using simulated data for testing...")
+    (X_pred, y_pred, mean_, std_) = get_simulation()
+
+    print(X_pred.iloc[0:200])
+    print(y_pred.iloc[0:200])
+
+    X_pred = X_pred.values.reshape((1, 1, X_pred.shape[0], X_pred.shape[1]))
+    y_pred = y_pred.values.reshape((1, 1, y_pred.shape[0], y_pred.shape[1]))
+
+    predicted = sess.run(y_hat, feed_dict={x: X_pred, y: y_pred})
+
+    # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
+    pnl_ = check_prediction(X_pred, y_pred, predicted, mean, std)
+
+    print("Average PnL: ", pnl_)
