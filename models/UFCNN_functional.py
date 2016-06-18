@@ -2063,8 +2063,10 @@ if action == 'ufcnn':
     print("Using simulated data for testing...")
     (X_pred, y_pred, mean_, std_) = get_simulation()
 
-    print(X_pred.iloc[0:200])
-    print(y_pred.iloc[0:200])
+    print("X test example:")
+    print(X_pred.iloc[-200:])
+    print("Y test example:")
+    print(y_pred.iloc[-200:])
 
     X_pred = X_pred.values.reshape((1, X_pred.shape[0], X_pred.shape[1]))
     y_pred = y_pred.values.reshape((1, y_pred.shape[0], y_pred.shape[1]))
@@ -2075,7 +2077,7 @@ if action == 'ufcnn':
 
     print("Y_hat example:")
     print(predicted[0, -200:, :])
-    predicted_sm = softmax(predicted)
+    predicted_sm = softmax(y_hat).eval(session=sess)
     print("Y_hat softmax example:")
     print(predicted_sm[0, -200:, :])
 
