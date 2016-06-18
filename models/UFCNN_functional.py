@@ -27,7 +27,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
 
 from keras.callbacks import TensorBoard
-from ufcnn import construct_ufcnn
+from ufcnn import construct_ufcnn, cross_entropy_loss
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -2018,20 +2018,25 @@ if action == 'ufcnn':
     print("X shape: ", X_train.shape)
     print("Y shape: ", y_train.shape)
 
-    X_train = X_train.values.reshape((1, 1, X_train.shape[0], X_train.shape[1]))
-    y_train = y_train.values.reshape((1, 1, y_train.shape[0], y_train.shape[1]))
+    X_train = X_train.values.reshape((1, X_train.shape[0], X_train.shape[1]))
+    y_train = y_train.values.reshape((1, y_train.shape[0], y_train.shape[1]))
 
-    X_val = X_val.values.reshape((1, 1, X_val.shape[0], X_val.shape[1]))
-    y_val = y_val.values.reshape((1, 1, y_val.shape[0], y_val.shape[1]))
+    X_val = X_val.values.reshape((1, X_val.shape[0], X_val.shape[1]))
+    y_val = y_val.values.reshape((1, y_val.shape[0], y_val.shape[1]))
 
     print("X shape: ", X_train.shape)
     print("Y shape: ", y_train.shape)
+    print("Example of X:")
+    print(X_train[0, -50:, :])
+    print("Example of Y:")
+    print(y_train[0, -50:, :])
 
     # Create the network.
-    x, y_hat, y, *_ = construct_ufcnn(n_inputs=2, n_outputs=3, n_levels=3, n_filters=100)
+    x, y_hat, *_ = construct_ufcnn(n_inputs=2, n_outputs=y_train.shape[2], n_levels=3, n_filters=100)
 
     # Define the categorical crossentropy loss and RMSProp optimizer over it.
-    loss = tf.nn.softmax_cross_entropy_with_logits(y_hat, y, name=None)
+    y = tf.placeholder(tf.float32, shape=[None, None, y_train.shape[2]])
+    loss = cross_entropy_loss(y_hat, y)
     optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
     train_step = optimizer.minimize(loss)
 
@@ -2052,8 +2057,8 @@ if action == 'ufcnn':
     print(X_pred.iloc[0:200])
     print(y_pred.iloc[0:200])
 
-    X_pred = X_pred.values.reshape((1, 1, X_pred.shape[0], X_pred.shape[1]))
-    y_pred = y_pred.values.reshape((1, 1, y_pred.shape[0], y_pred.shape[1]))
+    X_pred = X_pred.values.reshape((1, X_pred.shape[0], X_pred.shape[1]))
+    y_pred = y_pred.values.reshape((1, y_pred.shape[0], y_pred.shape[1]))
 
     predicted = sess.run(y_hat, feed_dict={x: X_pred, y: y_pred})
 
