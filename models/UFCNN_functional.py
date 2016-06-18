@@ -27,7 +27,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
 
 from keras.callbacks import TensorBoard
-from ufcnn import construct_ufcnn, cross_entropy_loss
+from ufcnn import construct_ufcnn, cross_entropy_loss, softmax
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -1659,8 +1659,8 @@ def get_simulation(write_spans = True):
     from signals import find_all_signals, make_spans, set_positions, pnl
     from datetime import date
     
-    df = pd.DataFrame(data={"askpx_": np.round(gen_cosine_amp(k=0, period=10, amp=20)[:, 0, 0]+201),
-                                "bidpx_": np.round(gen_cosine_amp(k=0, period=10, amp=20)[:, 0, 0]+200)})
+    df = pd.DataFrame(data={"askpx_": np.round(gen_cosine_amp(k=0, period=5, amp=20, xn=10000)[:, 0, 0]+201),
+                                "bidpx_": np.round(gen_cosine_amp(k=0, period=5, amp=20, xn=10000)[:, 0, 0]+200)})
     df = find_all_signals(df) 
     df = make_spans(df, 'Buy')
     df = make_spans(df, 'Sell')
@@ -2014,9 +2014,13 @@ if action == 'ufcnn':
     print("Using simulated data for training...")
     (X_train, y_train, mean, std) = get_simulation()
     (X_val, y_val, mean_, std_) = get_simulation()
+
     #
     print("X shape: ", X_train.shape)
     print("Y shape: ", y_train.shape)
+
+    print("Example of Y:")
+    print(y_train.values[-200:, :])
 
     X_train = X_train.values.reshape((1, X_train.shape[0], X_train.shape[1]))
     y_train = y_train.values.reshape((1, y_train.shape[0], y_train.shape[1]))
@@ -2024,27 +2028,32 @@ if action == 'ufcnn':
     X_val = X_val.values.reshape((1, X_val.shape[0], X_val.shape[1]))
     y_val = y_val.values.reshape((1, y_val.shape[0], y_val.shape[1]))
 
+    y_train_sparse = np.argmax(y_train, axis=2)
+    y_val_sparse = np.argmax(y_val, axis=2)
+
     print("X shape: ", X_train.shape)
     print("Y shape: ", y_train.shape)
     print("Example of X:")
-    print(X_train[0, -50:, :])
+    print(X_train[0, -200:, :])
     print("Example of Y:")
-    print(y_train[0, -50:, :])
+    print(y_train[0, -200:, :])
+    print("Example of Y sparse:")
+    print(y_train_sparse[0, -200:])
 
     # Create the network.
-    x, y_hat, *_ = construct_ufcnn(n_inputs=2, n_outputs=y_train.shape[2], n_levels=3, n_filters=100)
+    x, y_hat, *_ = construct_ufcnn(n_inputs=2, n_outputs=y_train.shape[2], n_levels=4, n_filters=150)
 
     # Define the categorical crossentropy loss and RMSProp optimizer over it.
     y = tf.placeholder(tf.float32, shape=[None, None, y_train.shape[2]])
     loss = cross_entropy_loss(y_hat, y)
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.0001)
     train_step = optimizer.minimize(loss)
 
     # Run several epochs of optimization.
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    for epoch in range(300):
+    for epoch in range(1000):
         if epoch % 5 == 0:
             mse = sess.run(loss, feed_dict={x: X_val, y: y_val})
             print("{:^7}{:^7.2f}".format(epoch, mse))
@@ -2060,9 +2069,17 @@ if action == 'ufcnn':
     X_pred = X_pred.values.reshape((1, X_pred.shape[0], X_pred.shape[1]))
     y_pred = y_pred.values.reshape((1, y_pred.shape[0], y_pred.shape[1]))
 
+    y_pred_sparse = np.argmax(y_pred, axis=2)
+
     predicted = sess.run(y_hat, feed_dict={x: X_pred, y: y_pred})
 
+    print("Y_hat example:")
+    print(predicted[0, -200:, :])
+    predicted_sm = softmax(predicted)
+    print("Y_hat softmax example:")
+    print(predicted_sm[0, -200:, :])
+
     # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
-    pnl_ = check_prediction(X_pred, y_pred, predicted, mean, std)
+    pnl_ = check_prediction(X_pred, y_pred, predicted_sm, mean, std)
 
     print("Average PnL: ", pnl_)
