@@ -27,7 +27,7 @@ from keras.layers.recurrent import LSTM
 from keras.layers.normalization import BatchNormalization
 
 from keras.callbacks import TensorBoard
-from ufcnn import construct_ufcnn, cross_entropy_loss, softmax
+from ufcnn import construct_ufcnn, cross_entropy_loss, softmax, compute_accuracy
 
 try:
     from convolutional_transpose import Convolution1D_Transpose_Arbitrary
@@ -1348,15 +1348,17 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
     total_error  = 0
     correct_class= 0
 
-    y_pred_class = np.zeros((y.shape[2],))
-    y_corr_pred_class = np.zeros((y.shape[2],))
-    y_class      = np.zeros((y.shape[2],))
-    y_labels = np.zeros((y.shape[1], y.shape[2]))
+    y_pred_class = np.zeros((y.shape[-1],))
+    y_corr_pred_class = np.zeros((y.shape[-1],))
+    y_class      = np.zeros((y.shape[-1],))
+    y_labels = np.zeros((y.shape[-2], y.shape[-1]))
     a=['Sell','Buy','Hold']
 
-    for i in range (y.shape[1]):
+    y = y.values.reshape((1, y.shape[-2], y.shape[-1]))
+
+    for i in range (y.shape[-2]):
         delta = 0.
-        for j in range(y.shape[2]):
+        for j in range(y.shape[-1]):
             delta += (y[0][i][j] - yp[0][i][j]) * (y[0][i][j] - yp[0][i][j])
     
         total_error += delta
@@ -1374,10 +1376,10 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
         y_labels[i][np.argmax(yp[0][i])] = 1
 
     print()
-    print("Total MSE Error: ",  total_error / y.shape[1])
-    print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[1]))
+    print("Total MSE Error: ",  total_error / y.shape[-2])
+    print("Correct Class Assignment:  %6d /%7d" % (correct_class, y.shape[-2]))
     
-    for i in range(y.shape[2]):
+    for i in range(y.shape[-1]):
         print("%4s: Correctly Predicted / Predicted / Total:    %6d/%6d/%7d" %(a[i], y_corr_pred_class[i], y_pred_class[i], y_class[i]))
 
     Xdf = Xdf * std
@@ -1440,8 +1442,8 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
     sig_pnl, sig_trades = get_pnl(xy_df)
     print("Signals PnL: {}, # of trades: {}".format(sig_pnl, sig_trades))
 
-    print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[1]))
-    print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[1]))
+    print ("Nr of trades: %5d /%7d" % (nr_trades, y.shape[-2]))
+    print ("PnL: %8.2f InvestedTics: %5d /%7d" % (pnl, invested_tics, y.shape[-2]))
     return pnl
     
 ### END
@@ -2053,35 +2055,56 @@ if action == 'ufcnn':
     sess = tf.Session()
     sess.run(tf.initialize_all_variables())
 
-    for epoch in range(1000):
-        if epoch % 5 == 0:
-            mse = sess.run(loss, feed_dict={x: X_val, y: y_val})
-            print("{:^7}{:^7.2f}".format(epoch, mse))
-        sess.run(train_step, feed_dict={x: X_train, y: y_train})
+    saver = tf.train.Saver()
 
+    try:
+        saver.restore(sess, "/tmp/model.ckpt")
+        print("Model restored.")
+    except:
+        for epoch in range(1000):
+            if epoch % 5 == 0:
+                mse = sess.run(loss, feed_dict={x: X_val, y: y_val})
+                print("{:^7}{:^7.2f}".format(epoch, mse))
+            sess.run(train_step, feed_dict={x: X_train, y: y_train})
 
     print("Using simulated data for testing...")
-    (X_pred, y_pred, mean_, std_) = get_simulation()
+    (X_pred_df, y_pred_df, mean_, std_) = get_simulation()
 
     print("X test example:")
-    print(X_pred.iloc[-200:])
+    print(X_pred_df.iloc[-200:])
     print("Y test example:")
-    print(y_pred.iloc[-200:])
+    print(y_pred_df.iloc[-200:])
 
-    X_pred = X_pred.values.reshape((1, X_pred.shape[0], X_pred.shape[1]))
-    y_pred = y_pred.values.reshape((1, y_pred.shape[0], y_pred.shape[1]))
+    X_pred = X_pred_df.values.reshape((1, X_pred_df.shape[0], X_pred_df.shape[1]))
+    y_pred = y_pred_df.values.reshape((1, y_pred_df.shape[0], y_pred_df.shape[1]))
 
     y_pred_sparse = np.argmax(y_pred, axis=2)
 
     predicted = sess.run(y_hat, feed_dict={x: X_pred, y: y_pred})
 
+    accuracy = compute_accuracy(predicted, y_pred).eval(session=sess)
+    print("Calculated test accuracy:", accuracy)
+
+    save_path = saver.save(sess, "/tmp/model.ckpt")
+
     print("Y_hat example:")
     print(predicted[0, -200:, :])
-    predicted_sm = softmax(y_hat).eval(session=sess)
+    predicted_sm = softmax(predicted).eval(session=sess)
     print("Y_hat softmax example:")
     print(predicted_sm[0, -200:, :])
 
+    print("X df shape: ",  X_pred_df.shape)
+    print("Y df shape: ",  y_pred_df.shape)
+
+    X_pred_df['dummy'] = 1
+    X_pred_df = X_pred_df.set_index('dummy', append=True)
+    y_pred_df['dummy'] = 1
+    y_pred_df = y_pred_df.set_index('dummy', append=True)
+
+    print("X df shape: ",  X_pred_df.shape)
+    print("Y df shape: ",  y_pred_df.shape)
+
     # check_prediction(X_pred.loc[date_idx], y_samples, predicted_output['output'], mean, std)
-    pnl_ = check_prediction(X_pred, y_pred, predicted_sm, mean, std)
+    pnl_ = check_prediction(X_pred_df, y_pred_df, predicted_sm, mean, std)
 
     print("Average PnL: ", pnl_)
