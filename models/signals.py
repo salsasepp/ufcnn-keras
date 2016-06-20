@@ -265,14 +265,14 @@ def make_spans(df, sig_type):
     return df
 
 
-def pnl(df, chained=False):
+def pnl(df, chained=False, comission=0.02):
     deals = []
     pnl = 0
     
     if not chained:
         for idx, row in df[(df['Buy Mod'] != 0) | (df['Sell Mod'] != 0)].iterrows():
             current_trade = row['Sell Mod'] * row["bidpx_"] - row['Buy Mod'] * row["askpx_"]
-            pnl = pnl + current_trade
+            pnl = pnl + current_trade - comission
             deals.append(current_trade)
             print("Running PnL: ", pnl)
 
@@ -334,18 +334,21 @@ def generate_signals_for_file(day_file, comission=0.0, write_spans=False, chaine
     else:
         df['signal'][df["Buy"] == 1] = 1.0
         df['signal'][df["Sell"] == 1] = -1.0
+
+    df['signal mod'] = df['Buy Mod'] - df['Sell Mod']
     
     _pnl, trade_count = pnl(df, chained_deals)
     print("Max. theoret. PNL    : ", _pnl) #df.sum().absret_)
     print("Max. theoret. return : ", _pnl / df["mp"].iloc[0])
     print("Max. number of trades: ", trade_count)
+    print("PnL per time-step: ", _pnl / df.shape[0])
     print("Min Trading Amount   : ", min_trade_amount)
     
     # and write the signal 
     if write_spans:
-        df = df[['signal', 'Buy', 'Sell', 'Buys', 'Sells']]
+        df = df[['signal', 'Buy', 'Sell', 'Buys', 'Sells', 'signal mod']]
     else:
-        df = df[['signal', 'Buy', 'Sell']]
+        df = df[['signal', 'Buy', 'Sell', 'signal mod']]
     signal_df = df['signal']
     df.to_pickle(write_signals_file)
     signal_df.to_csv(write_signal_file)
