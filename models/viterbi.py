@@ -151,7 +151,7 @@ if __name__ == '__main__':
                                        'ask_volume'])
         prices = compute_market_prices(prices)
 
-        actions, pnl_opt = find_optimal_strategy(prices, max_position=1)
+        actions, pnl_opt = find_optimal_strategy(prices, max_position=3)
         pnl_sim = simulate_trading(prices, actions)
         print("PNL compute by the optimization algorithm {:.3f}".format(pnl_opt))
         print("PNL compute by the simulator {:.3f}".format(pnl_sim))
