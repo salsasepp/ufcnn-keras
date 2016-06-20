@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import glob, sys, os
 
 
 def compute_market_prices(prices):
@@ -131,14 +132,34 @@ if __name__ == '__main__':
     # Example data file can be downloaded from here
     # https://s3.amazonaws.com/dvcpublic/workdir.zip. But any file in
     # the competition format should work.
-    df = pd.read_csv("../../workdir/prod_data_v.txt", header=None, delim_whitespace=True)
-    prices = pd.DataFrame(df.iloc[:, 2:6].values,
+    try:
+        path = sys.argv[1]
+    except:
+        path = "./training_data_large"
 
-                          columns=['bid_price', 'bid_volume', 'ask_price',
-                                   'ask_volume'])
-    prices = compute_market_prices(prices)
+    cum_pnl_opt = 0
+    cum_pnl_sim = 0
+    counter = 0
 
-    actions, pnl_opt = find_optimal_strategy(prices, max_position=1)
-    pnl_sim = simulate_trading(prices, actions)
-    print("PNL compute by the optimization algorithm {:.3f}".format(pnl_opt))
-    print("PNL compute by the simulator {:.3f}".format(pnl_sim))
+    file_list = sorted(glob.glob(os.path.join(path, 'prod_data_*v.txt')))
+
+    for f_name in file_list:
+        df = pd.read_csv(f_name, header=None, delim_whitespace=True)
+        prices = pd.DataFrame(df.iloc[:, 2:6].values,
+
+                              columns=['bid_price', 'bid_volume', 'ask_price',
+                                       'ask_volume'])
+        prices = compute_market_prices(prices)
+
+        actions, pnl_opt = find_optimal_strategy(prices, max_position=1)
+        pnl_sim = simulate_trading(prices, actions)
+        print("PNL compute by the optimization algorithm {:.3f}".format(pnl_opt))
+        print("PNL compute by the simulator {:.3f}".format(pnl_sim))
+
+        cum_pnl_opt = cum_pnl_opt + pnl_opt
+        cum_pnl_sim = cum_pnl_sim + pnl_sim
+        counter += 1
+
+    print("{} files processed".format(counter))
+    print("Avg. PNL compute by the optimization algorithm {:.3f}".format(cum_pnl_opt/counter))
+    print("Avg. PNL compute by the simulator {:.3f}".format(cum_pnl_sim/counter))
