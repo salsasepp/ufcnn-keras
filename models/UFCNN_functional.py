@@ -1102,6 +1102,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
     
     while True:
     #for i in range(0, 2): # for debug
+        # print(X.index.get_level_values(0).unique())
         for date_idx in X.index.get_level_values(0).unique():
             #print(date_idx)
             #print(X.loc[date_idx].shape)
@@ -1121,6 +1122,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
                 y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
 
                 #yield {'input': X_samples, 'output': y_samples}
+                print("Yielding samples from {}".format(date_idx))
                 yield (X_samples, y_samples)
             else:
                 assert isinstance(batch_length, numbers.Integral), "batch_length is not an integer"
@@ -1134,6 +1136,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
                         y_array = y.loc[date_idx].values[idx:]
                     X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
                     y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+                    print("Yielding samples from {} with index {}".format(date_idx, idx))
                     yield (X_samples, y_samples)
 
 
@@ -1354,7 +1357,7 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
     y_labels = np.zeros((y.shape[-2], y.shape[-1]))
     a=['Sell','Buy','Hold']
 
-    y = y.values.reshape((1, y.shape[-2], y.shape[-1]))
+    # y = y.values.reshape((1, y.shape[-2], y.shape[-1]))
 
     for i in range (y.shape[-2]):
         delta = 0.
@@ -2108,3 +2111,155 @@ if action == 'ufcnn':
     pnl_ = check_prediction(X_pred_df, y_pred_df, predicted_sm, mean, std)
 
     print("Average PnL: ", pnl_)
+
+if action == 'tradcom_ufcnn':
+    training_count = 10  # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
+    validation_count = 2
+    testing_count = 2
+    sequence_length = 5000
+    epochs = 1000
+
+    features_list = list(range(1, 33))  ## FULL
+
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
+    print("Training file list ", file_list)
+    (X, Y, mean, std) = prepare_tradcom_classification(training=True,
+                                                           ret_type='df',
+                                                           sequence_length=sequence_length,
+                                                           features_list=features_list,
+                                                           output_dim=3,
+                                                           file_list=file_list)
+
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[training_count:training_count + validation_count]
+    print("Validation file list ", file_list)
+    (X_val, Y_val, mean_, std_) = prepare_tradcom_classification(training=True,
+                                                                     ret_type='df',
+                                                                     sequence_length=sequence_length,
+                                                                     features_list=features_list,
+                                                                     output_dim=3,
+                                                                     file_list=file_list,
+                                                                     mean=mean,
+                                                                     std=std,
+                                                                     training_count=training_count)
+
+    print("X shape: ", X.shape)
+    # print(X)
+    print("Y shape: ", Y.shape)
+    #
+    # print("Mean")
+    # print(mean)
+    # print("Std")
+    # print(std)
+
+    # for _d in generator(X, y):
+    #    print(_d)
+
+    # Create the network.
+    x, y_hat, *_ = construct_ufcnn(n_inputs=len(features_list), n_outputs=Y.shape[1], n_levels=4, n_filters=150)
+
+    # Define the categorical crossentropy loss and RMSProp optimizer over it.
+    y = tf.placeholder(tf.float32, shape=[None, None, Y.shape[1]])
+    loss = cross_entropy_loss(y_hat, y)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+    train_step = optimizer.minimize(loss)
+
+    start_time = time.time()
+
+    # Run several epochs of optimization.
+    sess = tf.Session()
+    sess.run(tf.initialize_all_variables())
+
+    saver = tf.train.Saver()
+
+
+    # try:
+    saver.restore(sess, "/tmp/model-tradcom.ckpt")
+    print("Model restored.")
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+    # except:
+    val_loss_history = {}
+    val_acc_history = {}
+    for epoch in range(epochs):
+        print("Epoch:", epoch)
+        gen_train = generator(X, Y, batch_length=10000)
+        gen_val = generator(X_val, Y_val, batch_length=10000)
+        print("Preparing training set")
+        train_data = [next(gen_train) for _ in range(X.shape[0] // 10000)]
+        print("Preparing validation set")
+        val_data = [next(gen_val) for _ in range(X_val.shape[0] // 10000)]
+
+        for train_count in range(0, len(train_data)):
+            # (X_train, y_train) = next(generator(X, Y))
+            # print(train_data[train_count][0].shape)
+            # print(train_data[train_count][1].shape)
+            sess.run(train_step, feed_dict={x: train_data[train_count][0], y: train_data[train_count][1]})
+
+        if epoch % 5 == 0:
+            val_loss = 0
+            val_acc = 0
+            for val_count in range(0, len(val_data)):
+                # (X_validation, y_validation) = next(generator(X_val, Y_val))
+                # mse = sess.run(loss, feed_dict={x: X_validation, y: y_validation})
+                # print(train_data[val_count][0].shape)
+                # print(train_data[val_count][1].shape)
+                mse = sess.run(loss, feed_dict={x: val_data[val_count][0], y: val_data[val_count][1]})
+                val_loss = val_loss + mse
+                print("{:^7}{:^7.2f}".format(epoch, mse))
+                predicted = sess.run(y_hat, feed_dict={x: val_data[val_count][0], y: val_data[val_count][1]})
+                accuracy = compute_accuracy(predicted, val_data[val_count][1]).eval(session=sess)
+                val_acc = val_acc + accuracy
+                print("Calculated test accuracy:", accuracy)
+            val_loss_history[epoch] = val_loss/len(val_data)
+            val_acc_history[epoch] = val_acc/len(val_data)
+            print("Avg. loss for {:^7} epoch {:^7.2f}".format(epoch, val_loss_history[epoch]))
+            print("Avg. accuracy for {:^7} epoch {:^7.2f}".format(epoch, val_acc_history[epoch]))
+
+    print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % (
+    (time.time() - start_time), (time.time() - start_time) / epochs))
+
+    print(val_loss_history)
+    print(val_acc_history)
+
+    save_path = saver.save(sess, "/tmp/model-tradcom.ckpt")
+
+    # and get the files for testing
+    file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[
+                    training_count:training_count + testing_count]
+
+    (X_pred, Y_pred, mean_, std_) = prepare_tradcom_classification(training=False,
+                                                                       ret_type='df',
+                                                                       sequence_length=sequence_length,
+                                                                       features_list=features_list,
+                                                                       output_dim=3,
+                                                                       file_list=file_list,
+                                                                       mean=mean,
+                                                                       std=std,
+                                                                       training_count=training_count)
+
+    i = 0
+    pnl = 0.
+    for date_idx in X_pred.index.get_level_values(0).unique():
+        X_array = X_pred.loc[date_idx].values
+        y_array = Y_pred.loc[date_idx].values
+        X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
+
+        y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
+        print(y_samples[0, 0:200, :])
+
+        print("Predicting: day ", i, ": ", date_idx)
+        predicted = sess.run(y_hat, feed_dict={x: X_samples, y: y_samples})
+
+        accuracy = compute_accuracy(predicted, y_samples).eval(session=sess)
+        print("Calculated test accuracy:", accuracy)
+
+        print("Y_hat example:")
+        print(predicted[0, -200:, :])
+        predicted_sm = softmax(predicted).eval(session=sess)
+        print("Y_hat softmax example:")
+        print(predicted_sm[0, -200:, :])
+
+        pnl_ = check_prediction(X_pred.loc[date_idx], y_samples, predicted_sm, mean, std)
+        pnl += pnl_
+        i += 1
+    print("Average PnL: ", pnl / i)
+
