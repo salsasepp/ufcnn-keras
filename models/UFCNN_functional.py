@@ -1104,7 +1104,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
     #for i in range(0, 2): # for debug
         # print(X.index.get_level_values(0).unique())
         for date_idx in X.index.get_level_values(0).unique():
-            #print(date_idx)
+            print(date_idx)
             #print(X.loc[date_idx].shape)
             #print(y.loc[date_idx].shape)
             if not batch_length:
@@ -1127,7 +1127,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
             else:
                 assert isinstance(batch_length, numbers.Integral), "batch_length is not an integer"
                 for idx in range(0, X.loc[date_idx].shape[0], batch_length):
-                    print(idx)
+                    # print(idx)
                     if idx + batch_length <= X.loc[date_idx].shape[0]:
                         X_array = X.loc[date_idx].values[idx:idx+batch_length]
                         y_array = y.loc[date_idx].values[idx:idx+batch_length]
@@ -1136,7 +1136,7 @@ def generator(X, y, sequence_length=0, batch_length=None):
                         y_array = y.loc[date_idx].values[idx:]
                     X_samples = X_array.reshape((1, X_array.shape[0], X_array.shape[1]))
                     y_samples = y_array.reshape((1, y_array.shape[0], y_array.shape[1]))
-                    print("Yielding samples from {} with index {}".format(date_idx, idx))
+                    # print("Yielding samples from {} with index {}".format(date_idx, idx))
                     yield (X_samples, y_samples)
 
 
@@ -1515,14 +1515,14 @@ def get_pnl(df, max_position=1, comission=0):
 
     for idx, row in df_with_signals.iterrows():
         if row['buy'] == 1 and position < max_position:
-            print(row)
+            # print(row)
             current_trade = -row['buy'] * row["askpx_"]
             position += 1
             pnl = pnl + current_trade - comission
             deals.append(current_trade)
             print("Running PnL: {}, position: {}".format(pnl, position))
         elif row['sell'] == 1 and position > -max_position:
-            print(row)
+            # print(row)
             current_trade = row['sell'] * row["bidpx_"]
             position -= 1
             pnl = pnl + current_trade - comission
@@ -2116,10 +2116,12 @@ if action == 'tradcom_ufcnn':
     training_count = 10  # FIXED: Does not work with other numbers - the treatment of X and y in prepare_tradcom_classification needs to be changed
     validation_count = 2
     testing_count = 2
-    sequence_length = 5000
-    epochs = 1000
+    sequence_length = 20000
+    epochs = 500
+    batch_size=4
 
-    features_list = list(range(1, 33))  ## FULL
+    # features_list = list(range(1, 33))  ## FULL
+    features_list = list(range(2, 6))   ## Bid/Ask Only
 
     file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[:training_count]
     print("Training file list ", file_list)
@@ -2155,7 +2157,7 @@ if action == 'tradcom_ufcnn':
     #    print(_d)
 
     # Create the network.
-    x, y_hat, *_ = construct_ufcnn(n_inputs=len(features_list), n_outputs=Y.shape[1], n_levels=4, n_filters=150)
+    x, y_hat, *_ = construct_ufcnn(n_inputs=len(features_list), n_outputs=Y.shape[1], n_levels=4, n_filters=100)
 
     # Define the categorical crossentropy loss and RMSProp optimizer over it.
     y = tf.placeholder(tf.float32, shape=[None, None, Y.shape[1]])
@@ -2172,29 +2174,32 @@ if action == 'tradcom_ufcnn':
     saver = tf.train.Saver()
 
 
-    # try:
-    saver.restore(sess, "/tmp/model-tradcom.ckpt")
-    print("Model restored.")
-    optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
-    # except:
+    try:
+        saver.restore(sess, "/tmp/model-tradcom-2.ckpt")
+        print("Model restored.")
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+    except:
+        print("Model file not found!")
+
     val_loss_history = {}
     val_acc_history = {}
     for epoch in range(epochs):
         print("Epoch:", epoch)
-        gen_train = generator(X, Y, batch_length=10000)
-        gen_val = generator(X_val, Y_val, batch_length=10000)
+        gen_train = generator(X, Y, batch_length=sequence_length)
+        gen_val = generator(X_val, Y_val, batch_length=sequence_length)
         print("Preparing training set")
-        train_data = [next(gen_train) for _ in range(X.shape[0] // 10000)]
+        train_data = [next(gen_train) for _ in range(X.shape[0] // sequence_length)]
         print("Preparing validation set")
-        val_data = [next(gen_val) for _ in range(X_val.shape[0] // 10000)]
+        val_data = [next(gen_val) for _ in range(X_val.shape[0] // sequence_length)]
 
         for train_count in range(0, len(train_data)):
             # (X_train, y_train) = next(generator(X, Y))
             # print(train_data[train_count][0].shape)
             # print(train_data[train_count][1].shape)
-            sess.run(train_step, feed_dict={x: train_data[train_count][0], y: train_data[train_count][1]})
+            sess.run(train_step,
+                     feed_dict={x: train_data[train_count][0], y: train_data[train_count][1]})
 
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             val_loss = 0
             val_acc = 0
             for val_count in range(0, len(val_data)):
@@ -2202,15 +2207,16 @@ if action == 'tradcom_ufcnn':
                 # mse = sess.run(loss, feed_dict={x: X_validation, y: y_validation})
                 # print(train_data[val_count][0].shape)
                 # print(train_data[val_count][1].shape)
-                mse = sess.run(loss, feed_dict={x: val_data[val_count][0], y: val_data[val_count][1]})
+                mse = sess.run(loss,
+                               feed_dict={x: val_data[val_count][0], y: val_data[val_count][1]})
                 val_loss = val_loss + mse
                 print("{:^7}{:^7.2f}".format(epoch, mse))
                 predicted = sess.run(y_hat, feed_dict={x: val_data[val_count][0], y: val_data[val_count][1]})
                 accuracy = compute_accuracy(predicted, val_data[val_count][1]).eval(session=sess)
                 val_acc = val_acc + accuracy
                 print("Calculated test accuracy:", accuracy)
-            val_loss_history[epoch] = val_loss/len(val_data)
-            val_acc_history[epoch] = val_acc/len(val_data)
+                val_loss_history[epoch] = val_loss/len(val_data)
+                val_acc_history[epoch] = val_acc/len(val_data)
             print("Avg. loss for {:^7} epoch {:^7.2f}".format(epoch, val_loss_history[epoch]))
             print("Avg. accuracy for {:^7} epoch {:^7.2f}".format(epoch, val_acc_history[epoch]))
 
@@ -2220,7 +2226,7 @@ if action == 'tradcom_ufcnn':
     print(val_loss_history)
     print(val_acc_history)
 
-    save_path = saver.save(sess, "/tmp/model-tradcom.ckpt")
+    save_path = saver.save(sess, "/tmp/model-tradcom-2.ckpt")
 
     # and get the files for testing
     file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[
