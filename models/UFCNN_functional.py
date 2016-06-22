@@ -1677,13 +1677,13 @@ def get_simulation(write_spans = True):
     df['sell'] = df['Sell'] if not write_spans else df['Sells']
     ydf = df[["sell", "buy"]]
     
-    Xdf.loc['Milliseconds'] = Xdf.index
-    Xdf.loc['Date'] = pd.to_datetime(date.today())
+    Xdf['Milliseconds'] = Xdf.index
+    Xdf['Date'] = pd.to_datetime(date.today())
     Xdf = Xdf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
     #print(Xdf.index[0:100])
     
-    ydf.loc['Milliseconds'] = ydf.index
-    ydf.loc['Date'] = pd.to_datetime(date.today())
+    ydf['Milliseconds'] = ydf.index
+    ydf['Date'] = pd.to_datetime(date.today())
     ydf = ydf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
     #print(ydf.index[0:100])
     
