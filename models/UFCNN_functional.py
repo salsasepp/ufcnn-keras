@@ -1676,13 +1676,13 @@ def get_simulation(write_spans = True):
     df['sell'] = df['Sell'] if not write_spans else df['Sells']
     ydf = df[["sell", "buy"]]
     
-    Xdf['Milliseconds'] = Xdf.index
-    Xdf['Date'] = pd.to_datetime(date.today())
+    Xdf.loc['Milliseconds'] = Xdf.index
+    Xdf.loc['Date'] = pd.to_datetime(date.today())
     Xdf = Xdf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
     #print(Xdf.index[0:100])
     
-    ydf['Milliseconds'] = ydf.index
-    ydf['Date'] = pd.to_datetime(date.today())
+    ydf.loc['Milliseconds'] = ydf.index
+    ydf.loc['Date'] = pd.to_datetime(date.today())
     ydf = ydf.set_index(['Date', 'Milliseconds'], append=False, drop=True)
     #print(ydf.index[0:100])
     
@@ -2157,7 +2157,11 @@ if action == 'tradcom_ufcnn':
     #    print(_d)
 
     # Create the network.
-    x, y_hat, *_ = construct_ufcnn(n_inputs=len(features_list), n_outputs=Y.shape[1], n_levels=4, n_filters=100)
+    x, y_hat, *_ = construct_ufcnn(n_inputs=len(features_list),
+                                   n_outputs=Y.shape[1],
+                                   n_levels=4,
+                                   n_filters=100,
+                                   n_samples=sequence_length)
 
     # Define the categorical crossentropy loss and RMSProp optimizer over it.
     y = tf.placeholder(tf.float32, shape=[None, None, Y.shape[1]])
@@ -2175,9 +2179,9 @@ if action == 'tradcom_ufcnn':
 
 
     try:
-        saver.restore(sess, "/tmp/model-tradcom-2.ckpt")
+        saver.restore(sess, "/tmp/model-tradcom-3.ckpt")
         print("Model restored.")
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+        # optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
     except:
         print("Model file not found!")
 
@@ -2220,13 +2224,16 @@ if action == 'tradcom_ufcnn':
             print("Avg. loss for {:^7} epoch {:^7.2f}".format(epoch, val_loss_history[epoch]))
             print("Avg. accuracy for {:^7} epoch {:^7.2f}".format(epoch, val_acc_history[epoch]))
 
+        if epoch == 200:
+            optimizer = tf.train.RMSPropOptimizer(learning_rate=0.0001)
+
     print("--- Fitting: Elapsed: %d seconds per iteration %5.3f" % (
     (time.time() - start_time), (time.time() - start_time) / epochs))
 
     print(val_loss_history)
     print(val_acc_history)
 
-    save_path = saver.save(sess, "/tmp/model-tradcom-2.ckpt")
+    save_path = saver.save(sess, "/tmp/model-tradcom-3.ckpt")
 
     # and get the files for testing
     file_list = sorted(glob.glob('./training_data_large/prod_data_*v.txt'))[
