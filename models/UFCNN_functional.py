@@ -1357,7 +1357,8 @@ def check_prediction(Xdf, y, yp, mean, std, day=None):
     y_labels = np.zeros((y.shape[-2], y.shape[-1]))
     a=['Sell','Buy','Hold']
 
-    # y = y.values.reshape((1, y.shape[-2], y.shape[-1]))
+    if isinstance(y, pd.DataFrame):
+        y = y.values.reshape((1, y.shape[-2], y.shape[-1]))
 
     for i in range (y.shape[-2]):
         delta = 0.
