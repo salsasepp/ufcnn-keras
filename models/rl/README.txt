@@ -9,11 +9,6 @@ Epoch 00000/99999 | Loss 1109.0891 | Win trades 0 | Total PnL -2420.799999999995
 Epoch 00001/99999 | Loss 1091.1115 | Win trades 0 | Total PnL -2496.3999999999833 
 
 
-iLoss is the sum of all the trainigs
-Win Count: number of winning trades
-Total reward: PnL 
-
-
 
 Classfiles:
 
