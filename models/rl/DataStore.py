@@ -106,6 +106,9 @@ class DataStore(object):
             self.XdfBidAsk_array_list.append(self.XdfBidAsk.loc[date_idx].values)
             self.Xdf_array_day.append(date_idx)
 
+        ## TODO remove ?
+        self.Xdf['U2'] = 0.
+        self.Xdf['U4'] = 0.
 
 
     def standardize_columns(self, colgroup):

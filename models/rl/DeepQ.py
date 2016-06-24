@@ -50,7 +50,7 @@ class DeepQ(object):
         epsilon_decay = 0.95
         epsilon_min = 0.1
 
-        epoch = 100 # is number of cycles...
+        epoch = 1000 # is number of cycles...
         max_memory = 500000 # 10 Tage a 50.000 ticks..
     
         batch_size = 25 # 50
@@ -69,7 +69,7 @@ class DeepQ(object):
         #testing_store = ds.DataStore(training_days=training_days, testing_days=10, features_list=features_list, sequence_length=sequence_length)
 
         mo = NN_Model()
-        rms = RMSprop(lr=0.0001, rho=0.9, epsilon=1e-06)
+        rms = RMSprop(lr=0.0000000001, rho=0.9, epsilon=1e-06)
 
         model = mo.ufcnn_model_concat(regression=False, output_dim=num_actions, features=features_length, nb_filter=50,
                                    loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
@@ -83,12 +83,17 @@ class DeepQ(object):
         exp_replay = ExperienceReplay(max_memory=max_memory, env=env, sequence_dim=(sequence_length, features_length))
 
         # Train
-        win_cnt = 0
         for e in range(epoch):
             loss = 0.
             input_t = env.reset()
             game_over = False
+
             total_reward = 0
+
+            win_cnt = 0
+            loss_cnt = 0
+
+            ### TODO here add a loop over days-...
 
             while not game_over: # game_over ... end of trading day...
                 input_tm1 = input_t
@@ -99,11 +104,15 @@ class DeepQ(object):
                 else:
                     q = model.predict(exp_replay.resize_input(input_tm1))
                     action = np.argmax(q[0])
+                    ##action = np.argmax(q)
 
                 # apply action, get rewards and new state
                 input_t, reward, game_over, idays, lineindex = env.act(action) 
                 if reward > 0:
                     win_cnt += 1
+
+                if reward < 0:
+                    loss_cnt += 1
 
                 total_reward += reward
 
@@ -117,7 +126,7 @@ class DeepQ(object):
                 loss += curr_loss
                 print("Actual, total loss:",curr_loss, loss)
 
-            print("Epoch {:05d}/99999 | Loss {:.4f} | Win trades {} | Total PnL {:.2f} ".format(e, loss, win_cnt, total_reward))
+            print("Epoch {:05d}/{} | Loss {:.4f} | Win trades {:5d} | Loss trades {:5d} | Total PnL {:.2f} | Eps {:.4f} ".format(e, epoch, loss, win_cnt, loss_cnt, total_reward, epsilon))
             if epsilon > epsilon_min:
                 epsilon *= epsilon_decay 
             # Save trained model weights and architecture, this will be used by the visualization code

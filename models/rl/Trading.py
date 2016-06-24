@@ -45,6 +45,7 @@ class Trading(object):
             self.position_store[self.iday] = np.zeros(self.day_length)
             self.initrate_store[self.iday] = np.zeros(self.day_length)
 
+        # feed current position and initial rate to the net...
         self.current_position_store = self.position_store[self.iday] 
         self.current_initrate_store = self.initrate_store[self.iday] 
    
@@ -153,10 +154,10 @@ class Trading(object):
         """
         input = self.data_store.get_sequence(iday_, current_index_)
  
-        ## overwrite the 
-        for i in range(self.sequence_length):
-            input[i][self.features_length-2] = self.initrate_store[iday_][current_index_-self.sequence_length+i+1]
-            input[i][self.features_length-1] = self.position_store[iday_][current_index_-self.sequence_length+i+1]
+        ## NOT USED - causing problems?? TODO
+        ##for i in range(self.sequence_length):
+        ##    input[i][self.features_length-2] = self.initrate_store[iday_][current_index_-self.sequence_length+i+1]
+        ##    input[i][self.features_length-1] = self.position_store[iday_][current_index_-self.sequence_length+i+1]
 
         return input
 
