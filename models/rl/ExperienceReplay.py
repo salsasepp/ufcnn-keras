@@ -27,6 +27,7 @@ class ExperienceReplay(object):
         targets = np.zeros((inputs.shape[0], num_actions))
         for i, idx in enumerate(np.random.randint(0, len_memory,
                                                   size=inputs.shape[0])):
+            print("DIM ",i,idx,len_memory)
             #state_t, action_t, reward_t, state_tp1, idays_t, lineindex_t = self.memory[idx][0]
 
             action_t, reward_t, idays_t, lineindex_t = self.memory[idx][0]
@@ -34,22 +35,27 @@ class ExperienceReplay(object):
 
             # State TP1 is the next state
             game_over = self.memory[idx][1]
-            if not game_over:
-                state_tp1 = self.environment.observe(idays_t, lineindex_t+1)
             #print ("STATET",state_t)
 
-            inputs[i:i+1] = state_t
+            #inputs[i:i+1] = state_t
+            inputs[i] = state_t
+
             # There should be no target values for actions not taken.
             # Thou shalt not correct actions not taken #deep
 
-            targets[i] = model.predict(self.resize_input(state_t))[0]
+            a = model.predict(self.resize_input(state_t))[0]
+            print("TARGET ",a)
+            targets[i] = a
             if game_over:  # if game_over is True
                 targets[i, action_t] = reward_t
             else:
+                state_tp1 = self.environment.observe(idays_t, lineindex_t+1)
                 # reward_t + gamma * max_a' Q(s', a')
                 Q_sa = np.max(model.predict(self.resize_input(state_tp1))[0])
                 targets[i, action_t] = reward_t + self.discount * Q_sa
-        #print ("INPUTS after get_batch",inputs)
+            print("TARGET after",targets[i])
+
+        print ("INPUTS SHAPE after get_batch",inputs.shape)
         return inputs, targets
     
     def resize_input(self, i):

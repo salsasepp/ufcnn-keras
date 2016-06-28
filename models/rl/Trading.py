@@ -5,7 +5,6 @@ import random
 
 import DataStore
 
-from UFCNNModel import NN_Model
 from ExperienceReplay import ExperienceReplay
 
 
@@ -23,6 +22,7 @@ class Trading(object):
         self.features_length = features_length
         # Will be broadcasted to the other Modules. Change if changing actions below...
         self.action_count = 3
+        self.trading_fee = 0.2
 
 
     def reset(self):
@@ -39,6 +39,8 @@ class Trading(object):
         self.position = 0.
         self.initrate = 0.
         #print ("IDAY:" , self.iday)
+        self.current_rate_bid=0
+        self.current_rate_ask=0
       
         # and create the position store if necessary
         if self.iday not in self.position_store.keys():
@@ -69,7 +71,12 @@ class Trading(object):
               On Demand: 3..36 states, row[2+2]=BID, row[4+2]=ASK. Do we need the last 500 ticks...
               
         """
+        self.last_rate_bid = self.current_rate_bid
+        self.last_rate_ask = self.current_rate_ask
+        self.last_position_rate = 0
+
         self.current_rate_bid_norm, self.current_rate_bid,  self.current_rate_ask_norm, self.current_rate_ask = self.data_store.get_bid_ask(self.iday, self.current_index)
+
         #print("DATA for Rates ",self.iday, self.current_index)
         #print("INIT Rates:",self.current_rate_bid, self.current_rate_ask)
 
@@ -116,15 +123,53 @@ class Trading(object):
         """
         only when closing the position
         reward is the return of the position
+      
+
+        when old Position = 0 and new position = 0
+            -> reward = 0
+ 
+        when an old position was open at the beginning of the tick:
+            reward + = rate - last rate * position
+
+        when an new position was opened in the tick:
+	    reward -= abs(position) * tradingfee
+            reward -= position * Delta bid-ask  
+
          
         """
         reward = 0.
+        delayed_reward = True
+        if delayed_reward:
+            # The old trade only pnl calculation
+            if self.last_position != 0. and self.last_position != self.position:
+                reward = self._value_position_at_close(self.last_position, self.last_initrate, self.current_rate_bid, self.current_rate_ask)
+        else:
+            if self.last_position != 0:
+                reward += self._value_position(self.last_position, self.last_rate_bid, self.last_rate_ask, self.current_rate_bid, self.current_rate_ask)
 
-        if self.last_position != 0. and self.last_position != self.position:
-            reward = self._value_position_at_close(self.last_position, self.last_initrate, self.current_rate_bid, self.current_rate_ask)
-            #print("VALUATION ", self.last_position, self.last_initrate, self.current_rate_bid, self.current_rate_ask)
+            if self.last_position != self.position and self.position != 0:
+                reward -= abs(self.position) * self.trading_fee
+                reward += self._value_position(self.position, self.initrate, self.initrate, self.current_rate_bid, self.current_rate_ask)
+
+        print("VALUATION ", self.last_position, self.last_initrate, self.current_rate_bid, self.current_rate_ask)
+
         print("Reward",reward)
         return reward
+
+    def _value_position(self, position, last_rate_bid, last_rate_ask, current_rate_bid, current_rate_ask):
+        value = 0.
+
+        # LONG: CURRENT_BID - INITIAL_ASK
+        if position > 0.1:
+            value = position * (current_rate_bid - last_rate_bid)
+
+        # SHORT: CURRENT_ASK - INITIAL_BID
+        if position < -0.1:
+            value = position * (current_rate_ask - last_rate_ask) 
+
+        print("value: ",value, "pos: ", position, "last bid: ", last_rate_bid, "last ask: ", last_rate_ask, "curr bid: ", current_rate_bid, "curr ask: ", current_rate_ask)
+
+        return value
 
     def _value_position_at_close(self, closed_position, initrate, current_rate_bid, current_rate_ask):
         """
@@ -132,7 +177,6 @@ class Trading(object):
         Row 4 is ASK U4
         """
         value = 0.
-        trading_fee = 0.2 # Fee for a ROUND TRIP
 
         # LONG: CURRENT_BID - INITIAL_ASK
         if closed_position > 0.1:
@@ -142,7 +186,7 @@ class Trading(object):
         if closed_position < -0.1:
             value = closed_position * (current_rate_ask - initrate) 
 
-        value -= abs(closed_position) * trading_fee
+        value -= abs(closed_position) * self.trading_fee
         return value
 
 

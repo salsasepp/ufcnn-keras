@@ -9,15 +9,28 @@ Epoch 00000/99999 | Loss 1109.0891 | Win trades 0 | Total PnL -2420.799999999995
 Epoch 00001/99999 | Loss 1091.1115 | Win trades 0 | Total PnL -2496.3999999999833 
 
 
+Loss is the sum of all the trainigs
+Win Count: number of winning trades
+Total reward: PnL 
 
-Classfiles:
+
+Test the results of an optimization:
+
+python analyze_net.py  NAME_OF_THE_WEIGHTFILES without extension, e.g. 
+python analyze_net.py atari_rl_best
+
+
+
+Files:
 
 main_deepq.py       ... Main Program to start the run
 Deep.py             ... Training the RL, hyperparameters (at the top)
 Trading.py          ... rules for trading, P&L, this is the whole RL-environment
 DataStore.py        ... reads and stores the training data from the trading competition. Change this for other input data 
 ExperienceReplay.py ... stores known data to send it more than once through the net...
-UFCNNModel.py       ... UFCNN or other neural network to approximate the Q function
+Models.py           ... UFCNN or other neural network to approximate the Q function
+
+analyze_net.py      ... Script to run the net over testing days & calculate the PnL
 
 testDataStore.py    ... Script to test the DataStore.py
 Catch.py            ... old Catch game. Not used. Only for reference.

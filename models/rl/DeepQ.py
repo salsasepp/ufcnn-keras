@@ -1,10 +1,11 @@
 
 import json
 import numpy as np
+import time
 
 import DataStore as ds
 
-from UFCNNModel import NN_Model
+from Models import Models
 from ExperienceReplay import ExperienceReplay
 from Trading import Trading
 
@@ -50,10 +51,10 @@ class DeepQ(object):
         epsilon_decay = 0.95
         epsilon_min = 0.1
 
-        epoch = 1000 # is number of cycles...
-        max_memory = 500000 # 10 Tage a 50.000 ticks..
+        epoch = 50 # is number of cycles...
+        max_memory = 50 # 10 Tage a 50.000 ticks..
     
-        batch_size = 25 # 50
+        batch_size = 50 # 50
         sequence_length = 250 # 500
         training_days = 1
 
@@ -68,11 +69,13 @@ class DeepQ(object):
 
         #testing_store = ds.DataStore(training_days=training_days, testing_days=10, features_list=features_list, sequence_length=sequence_length)
 
-        mo = NN_Model()
-        rms = RMSprop(lr=0.0000000001, rho=0.9, epsilon=1e-06)
+        mo = Models()
+        rms = RMSprop(lr=0.0001, rho=0.9, epsilon=1e-06)
 
-        model = mo.ufcnn_model_concat(regression=False, output_dim=num_actions, features=features_length, nb_filter=50,
-                                   loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
+        model = mo.atari_conv_model(output_dim=num_actions, features=features_length, loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
+
+        #model = mo.atari_conv_model(regression=False, output_dim=num_actions, features=features_length, nb_filter=50,
+        #                           loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
 
         # If you want to continue training from a previous model, just uncomment the line bellow
         #mo.load_model("ufcnn_rl_training")
@@ -80,12 +83,14 @@ class DeepQ(object):
         # Define environment/game
 
         # Initialize experience replay object
-        exp_replay = ExperienceReplay(max_memory=max_memory, env=env, sequence_dim=(sequence_length, features_length))
+        start_time = time.time()
+        best_pnl = -99999. 
+        exp_replay = ExperienceReplay(max_memory=max_memory, env=env, sequence_dim=(sequence_length, features_length), discount=0.95)
+        lineindex = 0
 
         # Train
         for e in range(epoch):
             loss = 0.
-            input_t = env.reset()
             game_over = False
 
             total_reward = 0
@@ -93,43 +98,57 @@ class DeepQ(object):
             win_cnt = 0
             loss_cnt = 0
 
-            ### TODO here add a loop over days-...
+            ### loop over days-...
+            for i in range(training_days):
+                input_t = env.reset()
 
-            while not game_over: # game_over ... end of trading day...
-                input_tm1 = input_t
-                #print("INPUT ",input_tm1)
-                # get next action
-                if np.random.rand() <= epsilon:
-                    action = np.random.randint(0, num_actions, size=1)
-                else:
-                    q = model.predict(exp_replay.resize_input(input_tm1))
-                    action = np.argmax(q[0])
-                    ##action = np.argmax(q)
+                j = 0
+                while not game_over: # game_over ... end of trading day...
+                    input_tm1 = input_t
+                    #print("INPUT ",input_tm1)
+                    # get next action
+                    if np.random.rand() <= epsilon:
+                        action = np.random.randint(0, num_actions, size=1)
+                    else:
+                        q = model.predict(exp_replay.resize_input(input_tm1))
+                        action = np.argmax(q[0])
+                        ##action = np.argmax(q)
 
-                # apply action, get rewards and new state
-                input_t, reward, game_over, idays, lineindex = env.act(action) 
-                if reward > 0:
-                    win_cnt += 1
+                    # apply action, get rewards and new state
+                    input_t, reward, game_over, idays, lineindex = env.act(action) 
 
-                if reward < 0:
-                    loss_cnt += 1
+                    if reward > 0:
+                        win_cnt += 1
 
-                total_reward += reward
+                    if reward < 0:
+                        loss_cnt += 1
 
-                # store experience
-                exp_replay.remember([action, reward, idays, lineindex], game_over)
+                    total_reward += reward
 
-                # adapt model
-                inputs, targets = exp_replay.get_batch(model, batch_size=batch_size)
+                    # store experience
+                    exp_replay.remember([action, reward, idays, lineindex-1], game_over)
 
-                curr_loss = model.train_on_batch(exp_replay.resize_input(inputs), targets)
-                loss += curr_loss
-                print("Actual, total loss:",curr_loss, loss)
+                    # adapt model
 
-            print("Epoch {:05d}/{} | Loss {:.4f} | Win trades {:5d} | Loss trades {:5d} | Total PnL {:.2f} | Eps {:.4f} ".format(e, epoch, loss, win_cnt, loss_cnt, total_reward, epsilon))
+                    if j  % 1 == 0: 
+                        inputs, targets = exp_replay.get_batch(model, batch_size=batch_size)
+                        curr_loss = model.train_on_batch(exp_replay.resize_input(inputs), targets)
+                        print ("Temp Loss ", ",",curr_loss)
+                        loss += curr_loss
+                        print("Actual, total loss:", curr_loss, loss)
+
+                    j += 1
+
+            secs = time.time() - start_time
+            print("Epoch {:05d}/{} | Time {:.1f} | Loss {:.4f} | Win trades {:5d} | Loss trades {:5d} | Total PnL {:.2f} | Eps {:.4f} ".format(e, epoch, secs, loss, win_cnt, loss_cnt, total_reward, epsilon))
             if epsilon > epsilon_min:
                 epsilon *= epsilon_decay 
             # Save trained model weights and architecture, this will be used by the visualization code
-            mo.save_model(model,"ufcnn_rl_training")
+            
+            if total_reward > best_pnl: 
+                mo.save_model(model,"atari_rl_best")
+                best_pnl = total_reward
+            else:
+                mo.save_model(model,"atari_rl_training")
         # End of run
     
