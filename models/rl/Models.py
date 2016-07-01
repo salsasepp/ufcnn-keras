@@ -1,4 +1,5 @@
 import os
+import sys
 
 from keras import backend as K
 from keras.preprocessing import sequence
@@ -220,12 +221,25 @@ class Models(object):
 
         K.batch_set_value(weight_value_tuples)
 
-    def get_gradients(self):
+    def get_gradients_numeric(self, x, y, updates=[]):
+        cost_s, grads_s = self.get_cost_grads_symbolic()
+        #sample_weights missing...
 
-        pass
+        #inputs = x + y + self.sample_weights + [1.]
+        ## x and y must come from Keras ans are placeholdes
+        inputs = [x] + [y] + [] + [1.]
+        train_function = K.function(inputs,
+                                    [grads_s],
+                                     updates=updates)
+
+
+        f = train_function
+        outs = f(inputs)
+        print (outs)
+
 
      
-    def get_cost_grads(self):
+    def get_cost_grads_symbolic(self):
         """ Returns symbolic cost and symbolic gradients for the model """
         trainable_params = self._get_trainable_params(self.model)
 
@@ -235,8 +249,23 @@ class Models(object):
 
         return cost, grads
 
+
     def _get_trainable_params(self, model):
         params = []
         for layer in model.layers:
             params += training.collect_trainable_weights(layer)
         return params
+
+    def get_training_function(self, x,y):
+        # get trainable weights
+        trainable_weights = []
+        for layer in self.model.layers:
+            trainable_weights += collect_trainable_weights(layer)
+
+        # get the grads - more or less
+        weights = [K.variable(np.zeros(K.get_value(p).shape)) for p in trainable_weights]
+        training_updates = self.optimizer.get_updates(trainable_weights, self.constraints, self.total_loss)
+
+
+
+
