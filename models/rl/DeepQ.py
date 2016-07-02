@@ -51,12 +51,15 @@ class DeepQ(object):
         epsilon_decay = 0.95
         epsilon_min = 0.1
 
-        epoch = 50 # is number of cycles...
-        max_memory = 50 # 10 Tage a 50.000 ticks..
+        epoch = 4000 # is number of cycles...
+        max_memory = 2000 #  NEEDS TO BE AS BIG AS AT LEAST 1 TRADING DAY!!!
     
         batch_size = 50 # 50
         sequence_length = 250 # 500
+        discount = 0.95
+
         training_days = 1
+        testing_days = 1
 
         features_list = list(range(1,33))  ## FULL
         features_list = list(range(1,6))  ## SHORT!!
@@ -72,7 +75,27 @@ class DeepQ(object):
         mo = Models()
         rms = RMSprop(lr=0.0001, rho=0.9, epsilon=1e-06)
 
-        model = mo.atari_conv_model(output_dim=num_actions, features=features_length, loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
+        use_ufcnn=True
+        if use_ufcnn:
+            model =  mo.model_ufcnn_concat(sequence_length=sequence_length,
+                       features=features_length,
+                       nb_filter=15,
+                       filter_length=5,
+                       output_dim=num_actions,
+                       optimizer=rms,
+                       loss='mse',
+                       batch_size = batch_size,
+                       init="normal")
+            base_model_name = "ufcnn"
+        else:
+            model = mo.atari_conv_model(output_dim=num_actions, features=features_length, loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size, init="normal")
+            base_model_name = "atari"
+
+        testing_store = ds.DataStore(training_days=training_days, testing_days=testing_days, features_list=features_list, sequence_length=sequence_length, 
+                                     mean=training_store.mean, std=training_store.std)
+
+        test_env = Trading(data_store=testing_store, sequence_length=sequence_length, features_length=features_length)
+
 
         #model = mo.atari_conv_model(regression=False, output_dim=num_actions, features=features_length, nb_filter=50,
         #                           loss='mse', sequence_length=sequence_length, optimizer=rms, batch_size=batch_size)
@@ -83,9 +106,12 @@ class DeepQ(object):
         # Define environment/game
 
         # Initialize experience replay object
+
         start_time = time.time()
         best_pnl = -99999. 
-        exp_replay = ExperienceReplay(max_memory=max_memory, env=env, sequence_dim=(sequence_length, features_length), discount=0.95)
+        best_rndless_pnl = -99999.
+
+        exp_replay = ExperienceReplay(max_memory=max_memory, env=env, sequence_dim=(sequence_length, features_length), discount=discount)
         lineindex = 0
 
         # Train
@@ -97,6 +123,8 @@ class DeepQ(object):
 
             win_cnt = 0
             loss_cnt = 0
+            random_cnt = 0
+            no_random_cnt = 0
 
             ### loop over days-...
             for i in range(training_days):
@@ -108,10 +136,14 @@ class DeepQ(object):
                     #print("INPUT ",input_tm1)
                     # get next action
                     if np.random.rand() <= epsilon:
-                        action = np.random.randint(0, num_actions, size=1)
+                        action = np.random.randint(0, num_actions, size=1)[0]
+                        random_cnt += 1
+                        #print("RANDOM")
                     else:
                         q = model.predict(exp_replay.resize_input(input_tm1))
                         action = np.argmax(q[0])
+                        no_random_cnt += 1
+                        #print("SELECT")
                         ##action = np.argmax(q)
 
                     # apply action, get rewards and new state
@@ -124,31 +156,77 @@ class DeepQ(object):
                         loss_cnt += 1
 
                     total_reward += reward
+                    if reward > 1.:
+                        reward = 1.
+
+                    if reward < -1.:
+                        reward = -1.
 
                     # store experience
                     exp_replay.remember([action, reward, idays, lineindex-1], game_over)
 
                     # adapt model
 
-                    if j  % 1 == 0: 
+                    if j  > batch_size :  # do not run exp_rep if the store is empty...
                         inputs, targets = exp_replay.get_batch(model, batch_size=batch_size)
                         curr_loss = model.train_on_batch(exp_replay.resize_input(inputs), targets)
-                        print ("Temp Loss ", ",",curr_loss)
                         loss += curr_loss
-                        print("Actual, total loss:", curr_loss, loss)
 
                     j += 1
 
+            rndless_pnl = self.get_randomless_pnl(test_env=test_env, model=model, testing_days=testing_days)
+
             secs = time.time() - start_time
-            print("Epoch {:05d}/{} | Time {:.1f} | Loss {:.4f} | Win trades {:5d} | Loss trades {:5d} | Total PnL {:.2f} | Eps {:.4f} ".format(e, epoch, secs, loss, win_cnt, loss_cnt, total_reward, epsilon))
+            print("Epoch {:05d}/{} | Time {:7.1f} | Loss {:11.4f} | Win trades {:5d} | Loss trades {:5d} | Total PnL {:8.2f} | Rndless PnL {:8.2f} | Eps {:.4f} | Rnd: {:5d}| No Rnd: {:5d}  ".format(e, epoch, secs, loss, win_cnt, loss_cnt, total_reward, rndless_pnl, epsilon, random_cnt, no_random_cnt), flush=True)
             if epsilon > epsilon_min:
                 epsilon *= epsilon_decay 
             # Save trained model weights and architecture, this will be used by the visualization code
             
             if total_reward > best_pnl: 
-                mo.save_model(model,"atari_rl_best")
+                mo.save_model(model,base_model_name + "_rl_best")
                 best_pnl = total_reward
             else:
-                mo.save_model(model,"atari_rl_training")
+                mo.save_model(model,base_model_name + "_rl_training")
+
+            if rndless_pnl > best_pnl: 
+                mo.save_model(model,base_model_name + "_rl_rndless_best")
+                best_rndless_pnl = rndless_pnl
+
         # End of run
     
+    
+
+    def get_randomless_pnl(self, test_env=None, model=None, testing_days=None):
+        """ get the PNL with the current model without being epsilon greedy """
+
+        input_t = test_env.reset()
+        total_reward = 0
+
+        win_cnt = 0
+        loss_cnt = 0
+
+        for e in range(testing_days):
+            game_over = False
+
+            # get initial input
+
+            while not game_over:
+
+                input_tm1 = input_t
+
+                # get next action
+                q = model.predict(input_tm1.reshape((1,input_tm1.shape[0],input_tm1.shape[1],)))
+                action = np.argmax(q[0])
+
+                # apply action, get rewards and new state
+                input_t, reward, game_over, idays, lineindex = test_env.act(action) 
+
+                if reward > 0:
+                    win_cnt += 1
+
+                if reward < 0:
+                    loss_cnt += 1
+
+                total_reward += reward
+
+        return total_reward 

@@ -19,6 +19,8 @@ Test the results of an optimization:
 python analyze_net.py  NAME_OF_THE_WEIGHTFILES without extension, e.g. 
 python analyze_net.py atari_rl_best
 
+You can also look in the epoch line printed every epoch - the rndless PnL is the same as the analysis.
+
 
 
 Files:
