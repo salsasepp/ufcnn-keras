@@ -117,22 +117,12 @@ class Models(object):
         conv8 = Convolution1D(nb_filter=nb_filter, filter_length=filter_length, border_mode='same', init=init)(merge8)
         relu8 = Activation(activation)(conv8)
 
-        #########################################################
-        if regression:
-            #########################################################
-
-            conv9 = Convolution1D(nb_filter=output_dim, filter_length=filter_length, border_mode='same', init=init)(relu8)
-            output = conv9
-            #main_output = conv9.output
-
-        else:
-
-            conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='valid', init=init)(relu8)
-            activation9 = (Activation(activation))(conv9)
-            flat = Flatten () (activation9)
-            # activation in the last layer should be linear... and a one dimensional array.....
-            dense = Dense(output_dim)(flat)
-            output = dense
+        conv9 = Convolution1D(nb_filter=output_dim, filter_length=sequence_length, border_mode='valid', init=init)(relu8)
+        activation9 = (Activation(activation))(conv9)
+        flat = Flatten () (activation9)
+        # activation in the last layer should be linear... and a one dimensional array.....
+        dense = Dense(output_dim)(flat)
+        output = dense
     
         model = Model(input=main_input, output=output)
         model.compile(optimizer=optimizer, loss=loss)
@@ -188,7 +178,7 @@ class Models(object):
         return model
 
 
-    def get_layer_weights(self):
+    def XXXget_layer_weights(self):
         """
         get the layers of the current model...
         """
@@ -206,7 +196,7 @@ class Models(object):
         return result 
 
 
-    def set_layer_weights(self, input_weights):
+    def XXXset_layer_weights(self, input_weights):
         """
         set the weights of the current model to the input weights...
         """
@@ -221,7 +211,7 @@ class Models(object):
 
         K.batch_set_value(weight_value_tuples)
 
-    def get_gradients_numeric(self, x, y, updates=[]):
+    def XXXget_gradients_numeric(self, x, y, updates=[]):
         cost_s, grads_s = self.get_cost_grads_symbolic()
         #sample_weights missing...
 
@@ -239,7 +229,7 @@ class Models(object):
 
 
      
-    def get_cost_grads_symbolic(self):
+    def XXXget_cost_grads_symbolic(self):
         """ Returns symbolic cost and symbolic gradients for the model """
         trainable_params = self._get_trainable_params(self.model)
 
@@ -250,13 +240,13 @@ class Models(object):
         return cost, grads
 
 
-    def _get_trainable_params(self, model):
+    def XXX_get_trainable_params(self, model):
         params = []
         for layer in model.layers:
             params += training.collect_trainable_weights(layer)
         return params
 
-    def get_training_function(self, x,y):
+    def XXXget_training_function(self, x,y):
         # get trainable weights
         trainable_weights = []
         for layer in self.model.layers:
@@ -267,5 +257,171 @@ class Models(object):
         training_updates = self.optimizer.get_updates(trainable_weights, self.constraints, self.total_loss)
 
 
+    def pack_theta(self, trainable_weights):
+        """ Flattens a set of shared variables (trainable_weights)"""
+        x = np.empty(0)
+        for t in trainable_weights:
+            x = np.concatenate((x, K.get_value(t).reshape(-1)))
+        return x
 
 
+    def unpack_theta(self, theta):
+        """ Converts flattened theta back to tensor shapes of Keras model params """
+        weights = []
+        idx = 0
+        model = self.model
+        for layer in model.layers:
+            layer_weights = []
+            for param in layer.get_weights():
+                plen = np.prod(param.shape)
+                layer_weights.append(
+                    np.asarray(
+                        theta[
+                            idx:(
+                                idx +
+                                plen)].reshape(
+                            param.shape),
+                        dtype=np.float32))
+                idx += plen
+            weights.append(layer_weights)
+        return weights
+
+
+    def set_model_params(self, theta):
+        """ Sets the Keras model params from a flattened numpy array of theta """
+        model = self.model
+        trainable_params = self.unpack_theta(theta)
+        for trainable_param, layer in zip(trainable_params, model.layers):
+            layer.set_weights(trainable_param)
+
+
+    def get_cost_grads(self):
+        """ Returns the cost and flattened gradients for the model """
+        model = self.model
+        trainable_params = self.get_trainable_params()
+
+        #cost = model.model.total_loss
+        cost = model.total_loss
+        grads = K.gradients(cost, trainable_params)
+
+        return cost, grads
+
+
+    def flatten_grads(self, grads):
+        """ Flattens a set tensor variables (gradients) """
+        x = np.empty(0)
+        for g in grads:
+            x = np.concatenate((x, g.reshape(-1)))
+        return x
+
+
+    def get_trainable_params(self):
+        model = self.model
+        trainable_weights = []
+        for layer in model.layers:
+            trainable_weights += keras.engine.training.collect_trainable_weights(
+                layer)
+        return trainable_weights
+
+
+    def get_training_function(self, x, y):
+        model = self.model
+        cost, grads = self.get_cost_grads()
+        outs = [cost]
+        if type(grads) in {list, tuple}:
+            outs += grads
+        else:
+            outs.append(grads)
+
+        fn = K.function(
+            inputs=[],
+            outputs=outs,
+            givens={
+                model.inputs[0]: x,
+                model.targets[0]: y,
+                model.sample_weights[0]: np.ones(
+                    (x.shape[0],
+                     ),
+                    dtype=np.float32),
+                K.learning_phase(): np.uint8(1)})
+
+        def train_fn(theta):
+            self.set_model_params(theta)
+            cost_grads = fn([])
+            cost = np.asarray(cost_grads[0], dtype=np.float64)
+            grads = np.asarray(self.flatten_grads(cost_grads[1:]), dtype=np.float64)
+
+            return cost, grads
+
+        return train_fn
+
+
+    def fit_scipy(self, model, x, y, nb_epoch=300, method='L-BFGS-B', **kwargs):
+        trainable_params = self.get_trainable_params()
+        theta0 = self.pack_theta(trainable_params)
+   
+
+        train_fn = self.get_training_function(x, y)
+        print("BEFORE")
+        print(train_fn)
+        print(theta0)
+
+        weights = sp.optimize.minimize(
+            train_fn, theta0, method=method, jac=True, options={
+                'maxiter': nb_epoch, 'disp': False}, **kwargs)
+        print("AFTER")
+        trainable_params = self.get_trainable_params()
+        theta0 = self.pack_theta(trainable_params)
+        print(theta0)
+
+        theta_final = weights.x
+        print (weights.x)
+        self.set_model_params(theta_final)
+
+    def fit_sgd(self, x, y, nb_epoch=10):
+        alfa = 0.9 # ... Momentum
+        lr = 0.1 # -... learning rate
+
+        trainable_params = self.get_trainable_params()
+        theta0 = self.pack_theta(trainable_params)
+        train_fn = self.get_training_function(x, y)
+
+        m = np.zeros_like(theta0)
+        for i in range(nb_epoch):
+            trainable_params = self.get_trainable_params()
+            theta0 = self.pack_theta(trainable_params)
+
+            #mi = αmi + (1 − α)∆θi
+            m = alfa * m + (1-alfa)*theta0
+
+            # θ ← θ − ηmi
+            theta0 = theta0 - lr*m
+            self.set_model_params(theta0)
+            
+            
+    """
+if __name__ == "__main__":
+    sequence_length = 1000
+    features = 32
+    output_dim = 3
+    batch_size = 32
+
+
+    mo = Models()
+    model = mo.atari_conv_model(sequence_length=sequence_length, features=features, output_dim=output_dim, batch_size=32)
+
+
+    x = np.random.rand(batch_size, sequence_length, features).astype(np.float32)
+    y = np.random.rand(batch_size, output_dim).astype(np.float32)
+
+    x_eval = x[0].copy().reshape((1,sequence_length, features))
+    y_eval = y[0].copy().reshape((1,output_dim))
+
+    print("Loss before ", model.evaluate(x_eval,y_eval))
+
+
+    #mo.fit_scipy(model, x, y, nb_epoch=10, method='L-BFGS-B')
+    mo.fit_sgd(x, y, nb_epoch=1000)
+
+    print("Loss after  ", model.evaluate(x_eval,y_eval))
+    """
