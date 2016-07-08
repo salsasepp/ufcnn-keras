@@ -17,7 +17,7 @@ from Trading import Trading
 
 
 class GameState(object):
-  def __init__(self, rand_seed, display=False, no_op_max=27):
+  def __init__(self, rand_seed, display=False, no_op_max=27, testing=False):
     #self.ale = ALEInterface()
 
     np.random.seed(rand_seed)
@@ -32,8 +32,13 @@ class GameState(object):
 
     # Load the data
     training_store = DataStore(training_days=training_days, features_list=features_list, sequence_length=self.sequence_length)
-   
-    self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length)
+
+    if testing:
+        testing_store = DataStore(training_days=training_days, testing_days=testing_days, features_list=features_list, 
+            sequence_length=self.sequence_length, mean=training_store.mean, std=training_store.std)
+        self.environment = Trading(data_store=testing_store, sequence_length=self.sequence_length, features_length=self.features_length)
+    else:
+        self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing)
 
     # collect minimal action set
     #self.real_actions = self.ale.getMinimalActionSet()

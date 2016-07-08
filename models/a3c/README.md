@@ -13,6 +13,9 @@ Sine_long.csv must be renamed into prod_data_20130103v.txt and placed in the tra
 
 To start the optimization, run `python a3c.py`
 
+
+To view the results of an optimisation on the testing days, run `python Tradingresults.py`. You will need a checkpoint first, and the testing days need to be set in constants.py
+
 ## System Requirements
 
 - pythpon 2.7 or 3.x
