@@ -37,6 +37,8 @@ device = "/cpu:0"
 if USE_GPU:
   device = "/gpu:0"
 
+print("Conf: USING Device ",device)
+
 initial_learning_rate = log_uniform(INITIAL_ALPHA_LOW,
                                     INITIAL_ALPHA_HIGH,
                                     INITIAL_ALPHA_LOG_RATE)
@@ -61,6 +63,7 @@ grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
                               epsilon = RMSP_EPSILON,
                               clip_norm = GRAD_NORM_CLIP,
                               device = device)
+print("Conf: PARALLEL_SIZE: ", PARALLEL_SIZE)
 
 for i in range(PARALLEL_SIZE):
   training_thread = A3CTrainingThread(i, global_network, initial_learning_rate,
@@ -88,13 +91,13 @@ saver = tf.train.Saver()
 checkpoint = tf.train.get_checkpoint_state(CHECKPOINT_DIR)
 if checkpoint and checkpoint.model_checkpoint_path:
   saver.restore(sess, checkpoint.model_checkpoint_path)
-  print ("checkpoint loaded:", checkpoint.model_checkpoint_path)
+  print ("Conf: checkpoint loaded:", checkpoint.model_checkpoint_path)
   tokens = checkpoint.model_checkpoint_path.split("-")
   # set global step
   global_t = int(tokens[1])
   print (">>> global step set: ", global_t)
 else:
-  print ("Could not find old checkpoint")
+  print ("Conf: Could not find old checkpoint")
 
 
 def train_function(parallel_index):
@@ -115,7 +118,7 @@ def train_function(parallel_index):
     
 def signal_handler(signal, frame):
   global stop_requested
-  print('You pressed Ctrl+C!')
+  print('Conf: You pressed Ctrl+C!')
   stop_requested = True
   
 train_threads = []
@@ -130,7 +133,7 @@ for t in train_threads:
 print('Press Ctrl+C to stop')
 signal.pause()
 
-print('Now saving data. Please wait')
+print('Conf: Now saving data. Please wait. Steps:', global_t)
   
 for t in train_threads:
   t.join()

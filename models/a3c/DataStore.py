@@ -1,6 +1,5 @@
-
-
 import numpy as np
+np.set_printoptions(threshold=np.inf)
 import pandas as pd
 import os
 import glob
@@ -91,7 +90,6 @@ class DataStore(object):
 
         #select by features_list
         colgroups = [[2, 4], [3, 5]]
-        Xdf = Xdf[features_list]
       
         # keep the bid and ask unmodified
         unmodified_group = [2,4]
@@ -102,13 +100,18 @@ class DataStore(object):
         # split the Xdf along the days... 
         #print (self.Xdf)
         for date_idx in self.Xdf.index.get_level_values(0).unique():
-            self.Xdf_array_list.append(self.Xdf.loc[date_idx].values.astype(np.float32))
             self.XdfBidAsk_array_list.append(self.XdfBidAsk.loc[date_idx].values.astype(np.float32))
             self.Xdf_array_day.append(date_idx)
 
         ## TODO remove ?
         self.Xdf['U2'] = 0.
         self.Xdf['U4'] = 0.
+        self.Xdf = self.Xdf[features_list]
+
+        ###print("Xdf")
+        ###print(self.Xdf)
+        for date_idx in self.Xdf.index.get_level_values(0).unique():
+            self.Xdf_array_list.append(self.Xdf.loc[date_idx].values.astype(np.float32))
 
 
     def standardize_columns(self, colgroup):
@@ -212,7 +215,11 @@ class DataStore(object):
         if day_index > len(self.Xdf_array_list):
             raise ValueError
         arr = self.Xdf_array_list[day_index]
-        return arr[line_id-self.sequence_length+1:line_id+1].astype(np.float32)
+        a = arr[line_id-self.sequence_length+1:line_id+1].astype(np.float32)
+        ##print("A ")
+        ##print(a.shape)
+        ##print(a)
+        return a
 
     def get_bid_ask(self, day_index=0, line_id = None):
         """ 

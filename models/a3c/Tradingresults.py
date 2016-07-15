@@ -86,13 +86,14 @@ for i in range(testing_days):
         game_state.process(action)
 
         reward = game_state.reward
-        daily_reward += reward
 
         terminal = game_state.terminal
 
         game_state.update()
 
+    daily_reward = game_state.daily_reward
     total_reward += daily_reward
+    game_state.daily_reward = 0
     print("Day ",i, ", Reward: ", daily_reward)
 print("Total Reward: ", total_reward)
 

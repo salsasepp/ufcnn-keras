@@ -119,7 +119,8 @@ class GameACFFNetwork(GameACNetwork):
       self.b_fc3 = self._fc_bias_variable([1], 256)
 
       # state (input)
-      self.s = tf.placeholder("float", [None, 84, 84, 4])
+      #self.s = tf.placeholder("float", [None, 84, 84, 4])
+      self.s = tf.placeholder("float", [None, 84, 84])
     
       h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
       h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
@@ -162,14 +163,14 @@ class GameACLSTMNetwork(GameACNetwork):
     GameACNetwork.__init__(self, action_size, device)    
 
     with tf.device(self._device):
-      self.W_conv1 = self._conv_weight_variable([8, 8, 4, 16])  # stride=4
-      self.b_conv1 = self._conv_bias_variable([16], 8, 8, 4)
+      self.W_conv1 = self._conv_weight_variable([8, 8, 1, 16])  # stride=4
+      self.b_conv1 = self._conv_bias_variable([16], 8, 8, 1)
 
-      self.W_conv2 = self._conv_weight_variable([4, 4, 16, 32]) # stride=2
-      self.b_conv2 = self._conv_bias_variable([32], 4, 4, 16)
+      self.W_conv2 = self._conv_weight_variable([4, 1, 16, 32]) # stride=2
+      self.b_conv2 = self._conv_bias_variable([32], 4, 1, 16)
 
-      self.W_fc1 = self._fc_weight_variable([2592, 256])
-      self.b_fc1 = self._fc_bias_variable([256], 2592)
+      self.W_fc1 = self._fc_weight_variable([288, 256])
+      self.b_fc1 = self._fc_bias_variable([256], 288)
 
       # lstm
       self.lstm = CustomBasicLSTMCell(256)
@@ -183,12 +184,13 @@ class GameACLSTMNetwork(GameACNetwork):
       self.b_fc3 = self._fc_bias_variable([1], 256)
 
       # state (input)
-      self.s = tf.placeholder("float", [None, 84, 84, 4])
+      #self.s = tf.placeholder("float", [None, 84, 84, 4])
+      self.s = tf.placeholder("float", [None, 84, 8, 1])
     
       h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
       h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-      h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
+      h_conv2_flat = tf.reshape(h_conv2, [-1, 288])
       h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
       # h_fc1 shape=(5,256)
 
