@@ -35,7 +35,7 @@ class Trading(object):
             self.iday = np.random.randint(0, self.training_days)
         else:
             self.iday += 1 # iterate over all idays
-            if self.iday > data_store.get_number_days():
+            if self.iday > self.data_store.get_number_days():
                 self.iday = 0
 
         self.day_length = self.data_store.get_day_length(self.iday)
@@ -71,8 +71,10 @@ class Trading(object):
         terminal = False
         self.new_trade = False
         close_trade = False
+ 
+        OFFSET = 100
 
-        if self.current_index == self.day_length - 2:
+        if self.current_index >= self.day_length - 2 - OFFSET:
             if abs(self.position) > 0.1:
                 close_trade = True
             terminal = True
@@ -119,6 +121,11 @@ class Trading(object):
         # move to the next time step...
         self.current_index += 1
 
+        # enforce a minimum holding period
+        if self.new_trade:
+            self.current_index += OFFSET
+
+
         # and get the rates...
         self.current_rate_bid_norm, self.current_rate_bid, self.current_rate_ask_norm, self.current_rate_ask = self.data_store.get_bid_ask(self.iday, self.current_index)
 
@@ -157,7 +164,7 @@ class Trading(object):
 
         screen = np.resize(inputs, (84,8))
         if terminal:
-            print ("Daily: reward$/win$/short/long/", self.daily_reward, self.daily_wins, self.daily_short_trades, self.daily_long_trades)
+            print ("Daily: index/reward$/win$/short/long/", self.current_index, self.daily_reward, self.daily_wins, self.daily_short_trades, self.daily_long_trades)
 
         return reward, terminal, screen # Screen is 84 x 84 i
 

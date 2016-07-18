@@ -91,9 +91,9 @@ for i in range(testing_days):
 
         game_state.update()
 
-    daily_reward = game_state.daily_reward
+    daily_reward = game_state.environment.daily_reward
     total_reward += daily_reward
-    game_state.daily_reward = 0
+    game_state.environment.daily_reward = 0
     print("Day ",i, ", Reward: ", daily_reward)
 print("Total Reward: ", total_reward)
 
