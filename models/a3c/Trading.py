@@ -148,7 +148,9 @@ class Trading(object):
             reward += self.last_profit
             self.daily_wins += self.last_profit
             self.last_profit = 0.
-     
+            
+        # TODO Need to redesign reward function to penalize bad trades correctly?
+        
         # TODO test reward clipping?
 
         # integer 0-255 format 84 * 84
