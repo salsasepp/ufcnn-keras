@@ -17,7 +17,7 @@ from Trading import Trading
 
 
 class GameState(object):
-  def __init__(self, rand_seed, display=False, no_op_max=27, testing=False):
+  def __init__(self, rand_seed, display=False, no_op_max=27, testing=False, show_trades=None):
     #self.ale = ALEInterface()
 
     np.random.seed(rand_seed)
@@ -34,11 +34,12 @@ class GameState(object):
     training_store = DataStore(training_days=training_days, features_list=features_list, sequence_length=self.sequence_length)
 
     if testing:
+        print("Set up for testing")
         testing_store = DataStore(training_days=training_days, testing_days=testing_days, features_list=features_list, 
             sequence_length=self.sequence_length, mean=training_store.mean, std=training_store.std)
         self.environment = Trading(data_store=testing_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing)
     else:
-        self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing)
+        self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
     self.old_x = 0.
 
     # collect minimal action set
@@ -76,7 +77,8 @@ class GameState(object):
    
 
     if reshape:
-        x_t = np.reshape(x_t, (x_t.shape[0], x_t.shape[1], 1))
+        #x_t = np.reshape(x_t, (x_t.shape[0],1 , x_t.shape[1]))
+        pass
 
   
     #if (x1 != self.old_x):

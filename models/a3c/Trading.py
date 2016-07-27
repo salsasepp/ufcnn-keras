@@ -7,13 +7,19 @@ import random
 import DataStore
 
 from constants import TRADING_FEE
+from constants import SHOW_TRADES
+
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+
+
 
 
 
 class Trading(object):
 
-    def __init__(self, data_store=None, sequence_length=500, features_length=32, testing=False ):
-
+    def __init__(self, data_store=None, sequence_length=500, features_length=32, testing=False, show_trades=None ):
      
         self.data_store = data_store
         self.training_days = data_store.get_number_days()
@@ -27,6 +33,14 @@ class Trading(object):
         self.trading_fee = 0.2
         self.testing = testing
         self.iday = -1 # for testing
+        if show_trades is None:
+            self.show_trades = SHOW_TRADES
+        else:
+            self.show_trades = show_trades
+
+        #print("TRADING: Testing is" ,self.testing)
+        #for i in range (self.data_store.get_number_days()):
+        #    print("Day ",i,", len: ", self.data_store.get_day_length(i))
 
     def reset(self):
 
@@ -40,7 +54,7 @@ class Trading(object):
 
         self.day_length = self.data_store.get_day_length(self.iday)
 
-        self.current_index = self.sequence_length 
+        self.current_index = int(self.sequence_length)
 
         self.position = 0.
         self.initrate = 0.
@@ -53,6 +67,27 @@ class Trading(object):
         self.daily_long_trades = 0
         self.daily_short_trades = 0
         self.daily_wins = 0.
+
+    def create_plot(self, testday):
+        self.iday = testday
+        self.day_length = self.data_store.get_day_length(self.iday)
+
+        bid = np.zeros(self.day_length)
+   
+        for i in range(self.day_length):
+            rate_bid_norm, rate_bid, rate_ask_norm, rate_ask = self.data_store.get_bid_ask(self.iday, i)
+            bid[i] = rate_bid
+            #print("I",i,", Bid: ",rate_bid, " norm", rate_bid_norm, rate_ask_norm, rate_ask )
+
+        fig = plt.figure()
+        plt.plot(bid)
+        plt.xlabel('ticks')
+        plt.ylabel('Bid')
+        plt.title('Bid Rate for day '+str(testday) + " : " + str(self.data_store.get_day(self.iday)))
+        plt.savefig("Day_"+str(testday)+".png")
+        plt.close(fig)
+
+
 
     def get_reward(self, action):
         """ #reward, terminal, self._screen = get_reward(action) # Screen is 84 x 8 i
@@ -72,28 +107,31 @@ class Trading(object):
         self.new_trade = False
         close_trade = False
  
-        OFFSET = 100
+        OFFSET = 0
+        last_position = self.position
 
+        #print("day length ", self.day_length, self.iday,  self.current_index )
         if self.current_index >= self.day_length - 2 - OFFSET:
             if abs(self.position) > 0.1:
                 close_trade = True
             terminal = True
             self.position = 0 
         else:
-            if action == 0 or action == 1112: # STAY/GO_SHORT
+            if action == 0: # STAY/GO_SHORT
                 if self.position >- 0.1:
                     if self.position > 0.1:
                         close_trade = True
                     if debug:
                         print("Going SHORT: ",index, self.current_rate_bid)
-                    self.initrate = self.current_rate_bid # SELL at the BID
-                    initrate_norm = self.current_rate_bid_norm # SELL at the BID
-                    self.position = -1 # only 1 contract 
-                    self.new_trade = True
-                    reward -= TRADING_FEE * abs(self.position)
-                    last_rate_ask = self.initrate # for correct & simple position calculation
-                    self.daily_trades += 1
-                    self.daily_short_trades += 1
+                    self.position = -1 # SHORT TRADES, otherwise 0
+                    if True: # SHORT TRADES, otherwise False
+                        initrate_norm = self.current_rate_bid_norm # SELL at the BID
+                        self.initrate = self.current_rate_bid # SELL at the BID
+                        self.new_trade = True
+                        reward -= TRADING_FEE * abs(self.position)
+                        last_rate_ask = self.initrate # for correct & simple position calculation
+                        self.daily_trades += 1
+                        self.daily_short_trades += 1
 
             if action == 1: # STAY/GO_LONG 
                 #if self.position == 0:
@@ -104,7 +142,7 @@ class Trading(object):
                         print("Going LONG: ",index, self.current_rate_bid)
                     self.initrate = self.current_rate_ask # BUY at the ASK
                     initrate_norm = self.current_rate_ask_norm # 
-                    self.position = 1 # only 1 contract 
+                    self.position = 1 # only 1 contract LONG
                     self.new_trade = True
                     reward -= TRADING_FEE * abs(self.position)
                     last_rate_bid = self.initrate # for correct & simple position calculation
@@ -118,12 +156,14 @@ class Trading(object):
                     self.position = 0 
                     close_trade = True
 
-        # move to the next time step...
-        self.current_index += 1
-
-        # enforce a minimum holding period
+        # enforce a minimum holding period (OFFSET)
         if self.new_trade:
             self.current_index += OFFSET
+            if self.show_trades:
+                print("OPEN:  ", self.current_index, self.position, self.initrate)
+
+        # move to the next time step...
+        self.current_index += 1
 
 
         # and get the rates...
@@ -139,15 +179,20 @@ class Trading(object):
         if self.position < -0.1:
             value = self.position * (self.current_rate_ask - last_rate_ask) 
 
+        if close_trade and self.last_profit > 0:
+            reward += self.last_profit # profits count twice :-)
+            self.daily_wins += self.last_profit
+
+        if close_trade and SHOW_TRADES:
+                print("CLOSE: ", self.current_index, last_position, self.initrate, self.last_profit)
+
+        if close_trade:
+            self.last_profit = 0.
 
         # get the reward
         reward += value
         self.daily_reward += reward
         self.last_profit += reward
-        if close_trade and self.last_profit > 0:
-            reward += self.last_profit
-            self.daily_wins += self.last_profit
-            self.last_profit = 0.
      
         # TODO test reward clipping?
 
@@ -162,7 +207,7 @@ class Trading(object):
   
         inputs[0,0] = self.position
 
-        screen = np.resize(inputs, (84,8))
+        screen = np.resize(inputs, (168,1, 4))
         if terminal:
             print ("Daily: index/reward$/win$/short/long/", self.current_index, self.daily_reward, self.daily_wins, self.daily_short_trades, self.daily_long_trades)
 
@@ -258,6 +303,6 @@ class Trading(object):
   
         inputs[0,0] = self.position
 
-        screen = np.resize(inputs, (84,8))
+        screen = np.resize(inputs, (168,1,4))
 
         return reward, terminal, screen # Screen is 84 x 84 i

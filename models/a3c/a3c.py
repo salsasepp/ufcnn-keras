@@ -7,6 +7,7 @@ import signal
 import random
 import math
 import os
+import time
 
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
@@ -122,6 +123,7 @@ def signal_handler(signal, frame):
   stop_requested = True
   
 train_threads = []
+start_time = time.time()
 for i in range(PARALLEL_SIZE):
   train_threads.append(threading.Thread(target=train_function, args=(i,)))
   
@@ -142,5 +144,8 @@ if not os.path.exists(CHECKPOINT_DIR):
   os.mkdir(CHECKPOINT_DIR)  
 
 saver.save(sess, CHECKPOINT_DIR + '/' + 'checkpoint', global_step = global_t)
+end_time = time.time()
+
+print("Total Time: ", end_time-start_time, ", per Timestep: ", (end_time-start_time)/global_t)
 
 

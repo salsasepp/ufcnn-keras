@@ -23,6 +23,9 @@ class GameACNetwork(object):
       
       # policy entropy
       entropy = -tf.reduce_sum(self.pi * tf.log(self.pi), reduction_indices=1)
+
+      ##self.pi = tf.Print(self.pi, [self.pi], message="This is self.pi: ", summarize=40)
+      ##self.a = tf.Print(self.a, [self.a], message="This is self.a: ", summarize=40)
       
       # policy loss (output)  (add minus, because this is for gradient ascent)
       policy_loss = - tf.reduce_sum( tf.reduce_sum( tf.mul( tf.log(self.pi), self.a ), reduction_indices=1 ) * self.td + entropy * entropy_beta )
@@ -32,6 +35,10 @@ class GameACNetwork(object):
       
       # value loss (output)
       # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
+      ##print("HHH",self.r.get_shape())
+      ##print("HHH",self.v.get_shape())
+      ##self.r = tf.Print(self.r, [self.r], message="This is self.r: ", summarize=40)
+      ##self.v = tf.Print(self.v, [self.v], message="This is self.v: ", summarize=40)
       value_loss = 0.5 * tf.nn.l2_loss(self.r - self.v)
 
       # gradienet of policy and value are summed up
@@ -101,11 +108,11 @@ class GameACFFNetwork(GameACNetwork):
     GameACNetwork.__init__(self, action_size, device)
     
     with tf.device(self._device):
-      self.W_conv1 = self._conv_weight_variable([8, 8, 4, 16])  # stride=4
-      self.b_conv1 = self._conv_bias_variable([16], 8, 8, 4)
+      self.W_conv1 = self._conv_weight_variable([8, 4, 4, 16])  # stride=4
+      self.b_conv1 = self._conv_bias_variable([16], 8, 4, 4)
 
-      self.W_conv2 = self._conv_weight_variable([4, 4, 16, 32]) # stride=2
-      self.b_conv2 = self._conv_bias_variable([32], 4, 4, 16)
+      self.W_conv2 = self._conv_weight_variable([8, 4, 16, 32]) # stride=2
+      self.b_conv2 = self._conv_bias_variable([32], 8, 4, 16)
 
       self.W_fc1 = self._fc_weight_variable([2592, 256])
       self.b_fc1 = self._fc_bias_variable([256], 2592)
@@ -133,6 +140,7 @@ class GameACFFNetwork(GameACNetwork):
       # value (output)
       v_ = tf.matmul(h_fc1, self.W_fc3) + self.b_fc3
       self.v = tf.reshape( v_, [-1] )
+      print("SHAPE ", self.v.get_shape())
 
   def run_policy_and_value(self, sess, s_t):
     pi_out, v_out = sess.run( [self.pi, self.v], feed_dict = {self.s : [s_t]} )
@@ -163,14 +171,14 @@ class GameACLSTMNetwork(GameACNetwork):
     GameACNetwork.__init__(self, action_size, device)    
 
     with tf.device(self._device):
-      self.W_conv1 = self._conv_weight_variable([8, 8, 1, 16])  # stride=4
-      self.b_conv1 = self._conv_bias_variable([16], 8, 8, 1)
+      self.W_conv1 = self._conv_weight_variable([8, 1, 4, 16])  # stride=4
+      self.b_conv1 = self._conv_bias_variable([16], 8, 1, 1)
 
-      self.W_conv2 = self._conv_weight_variable([4, 1, 16, 32]) # stride=2
-      self.b_conv2 = self._conv_bias_variable([32], 4, 1, 16)
+      self.W_conv2 = self._conv_weight_variable([1, 1, 16, 32]) # stride=2
+      self.b_conv2 = self._conv_bias_variable([32], 1, 1, 16)
 
-      self.W_fc1 = self._fc_weight_variable([288, 256])
-      self.b_fc1 = self._fc_bias_variable([256], 288)
+      self.W_fc1 = self._fc_weight_variable([2592, 256])
+      self.b_fc1 = self._fc_bias_variable([256], 2592 )
 
       # lstm
       self.lstm = CustomBasicLSTMCell(256)
@@ -185,14 +193,15 @@ class GameACLSTMNetwork(GameACNetwork):
 
       # state (input)
       #self.s = tf.placeholder("float", [None, 84, 84, 4])
-      self.s = tf.placeholder("float", [None, 84, 8, 1])
+      self.s = tf.placeholder("float", [None, 168, 1, 4])
     
-      h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
+      h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 1) + self.b_conv1)
       h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-      h_conv2_flat = tf.reshape(h_conv2, [-1, 288])
+      h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
       h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
       # h_fc1 shape=(5,256)
+      ##h_fc1 = tf.Print(h_fc1, [h_fc1], message="NN This is h_fc1: ", summarize=40)
 
       h_fc1_reshaped = tf.reshape(h_fc1, [1,-1,256])
       # h_fc_reshaped = (1,5,256)
@@ -217,10 +226,19 @@ class GameACLSTMNetwork(GameACNetwork):
 
       # policy (output)
       self.pi = tf.nn.softmax(tf.matmul(lstm_outputs, self.W_fc2) + self.b_fc2)
+      ##self.pi = tf.Print(self.pi, [self.pi], message="NN This is self.pi: ", summarize=40)
       
       # value (output)
       v_ = tf.matmul(lstm_outputs, self.W_fc3) + self.b_fc3
+      ##v_ = tf.Print(v_, [v_], message="NN This is v_ ", summarize=40)
       self.v = tf.reshape( v_, [-1] )
+      ##self.v = tf.Print(self.v, [self.v], message="NN This is self.v: ", summarize=40)
+
+      # in OK  tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v: [-0.036351625]
+      #I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.pi: [0.49193981 0.50806022]
+      #I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v: [-0.03456594]
+
+      print("SHAPE ", self.v)
 
       self.reset_state()
       

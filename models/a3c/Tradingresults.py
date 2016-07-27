@@ -72,13 +72,20 @@ if checkpoint and checkpoint.model_checkpoint_path:
 else:
   print ("Could not find old checkpoint")
 
-game_state = GameState(0, display=True, no_op_max=0, testing=True)
+game_state = GameState(0, display=True, no_op_max=0, testing=True, show_trades=True)
 
 testing_days = TESTING_DAYS
 total_reward = 0
+
 for i in range(testing_days):
+    print("Working on day ",i)
     terminal = False
     daily_reward = 0
+
+    #new
+    if i > 0:
+        game_state.environment.reset() 
+
     while not terminal:
         pi_values = global_network.run_policy(sess, game_state.s_t)
 
@@ -94,6 +101,13 @@ for i in range(testing_days):
     daily_reward = game_state.environment.daily_reward
     total_reward += daily_reward
     game_state.environment.daily_reward = 0
+
     print("Day ",i, ", Reward: ", daily_reward)
 print("Total Reward: ", total_reward)
+
+
+for i in range(testing_days):
+    print("Potting day ",i)
+    game_state.environment.create_plot(i)
+    
 
