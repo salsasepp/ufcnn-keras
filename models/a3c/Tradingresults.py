@@ -75,12 +75,12 @@ else:
 game_state = GameState(0, display=True, no_op_max=0, testing=True, show_trades=True)
 
 testing_days = TESTING_DAYS
-total_reward = 0
+total_pnl = 0
 
 for i in range(testing_days):
     print("Working on day ",i)
     terminal = False
-    daily_reward = 0
+    daily_pnl = 0
 
     #new
     if i > 0:
@@ -98,16 +98,16 @@ for i in range(testing_days):
 
         game_state.update()
 
-    daily_reward = game_state.environment.daily_reward
-    total_reward += daily_reward
-    game_state.environment.daily_reward = 0
+    game_state.environment.create_plot(game_state.environment.iday)
+    daily_pnl = game_state.environment.daily_pnl
+    total_pnl += daily_pnl
+    game_state.environment.daily_pnl = 0
 
-    print("Day ",i, ", Reward: ", daily_reward)
-print("Total Reward: ", total_reward)
+    print("Day ",i, ",Realized PnL: ", daily_pnl)
+print("Total Realized PnL: ", total_pnl)
 
 
 for i in range(testing_days):
     print("Potting day ",i)
-    game_state.environment.create_plot(i)
     
 

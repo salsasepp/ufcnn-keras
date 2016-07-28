@@ -37,7 +37,7 @@ class GameState(object):
         print("Set up for testing")
         testing_store = DataStore(training_days=training_days, testing_days=testing_days, features_list=features_list, 
             sequence_length=self.sequence_length, mean=training_store.mean, std=training_store.std)
-        self.environment = Trading(data_store=testing_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing)
+        self.environment = Trading(data_store=testing_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
     else:
         self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
     self.old_x = 0.
