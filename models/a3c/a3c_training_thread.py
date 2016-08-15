@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 import numpy as np
-import random
 
+from a3c_util import choose_action
 from accum_trainer import AccumTrainer
 from game_state import GameState
 from game_state import ACTION_SIZE
@@ -67,21 +67,6 @@ class A3CTrainingThread(object):
       learning_rate = 0.0
     return learning_rate
 
-  def choose_action(self, pi_values):
-    values = []
-    sum = 0.0
-    for rate in pi_values:
-      sum = sum + rate
-      value = sum
-      values.append(value)
-    
-    r = random.random() * sum
-    for i in range(len(values)):
-      if values[i] >= r:
-        return i;
-    #fail safe
-    return len(values)-1
-
   def _record_score(self, sess, summary_writer, summary_op, score_input, score, global_t):
     summary_str = sess.run(summary_op, feed_dict={
       score_input: score
@@ -110,7 +95,7 @@ class A3CTrainingThread(object):
     # t_max times loop
     for i in range(LOCAL_T_MAX):
       pi_, value_ = self.local_network.run_policy_and_value(sess, self.game_state.s_t)
-      action = self.choose_action(pi_)
+      action = choose_action(pi_)
 
       states.append(self.game_state.s_t)
       actions.append(action)

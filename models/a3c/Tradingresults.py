@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import random
 
+from a3c_util import choose_action
 from game_state import GameState
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
@@ -18,21 +19,6 @@ from constants import USE_GPU
 from constants import USE_LSTM
 
 from constants import TESTING_DAYS
-
-def choose_action(pi_values):
-  values = []
-  sum = 0.0
-  for rate in pi_values:
-    sum = sum + rate
-    value = sum
-    values.append(value)
-    
-  r = random.random() * sum
-  for i in range(len(values)):
-    if values[i] >= r:
-      return i;
-  #fail safe
-  return len(values)-1
 
 # use CPU for display tool
 device = "/cpu:0"
