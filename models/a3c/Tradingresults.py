@@ -58,7 +58,7 @@ if checkpoint and checkpoint.model_checkpoint_path:
 else:
   print ("Could not find old checkpoint")
 
-game_state = GameState(0, display=True, no_op_max=0, testing=True, show_trades=True)
+game_state = GameState(0, display=True, testing=True, show_trades=True)
 
 testing_days = TESTING_DAYS
 total_pnl = 0

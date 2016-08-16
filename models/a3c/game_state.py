@@ -12,9 +12,8 @@ from Trading import Trading
 
 
 class GameState(object):
-  def __init__(self, rand_seed, display=False, no_op_max=27, testing=False, show_trades=None):
+  def __init__(self, rand_seed, display=False, testing=False, show_trades=None):
     np.random.seed(rand_seed)
-    self._no_op_max = no_op_max
 
     # Load the data
     training_store = DataStore(training_days=TRAINING_DAYS, features_list=FEATURES_LIST, sequence_length=SEQUENCE_LENGTH)
@@ -57,17 +56,12 @@ class GameState(object):
   def reset(self):
     self.environment.reset()
     
-    # randomize initial state
-    # TODO: Do we need this?
-    if self._no_op_max > 0:
-      no_op = np.random.randint(0, self._no_op_max + 1)
-      for _ in range(no_op):
-         _, __, ___ = self.environment.get_reward(2) # Screen is 84 x 84
+    # TODO: randomize initial state?
 
-    _, _, x_t = self._process_frame(2) # Action GO_FLAT
-    
     self.reward = 0
     self.terminal = False
+
+    _, _, x_t = self._process_frame(2) # Action GO_FLAT
     self.s_t = self.rebase(x_t)
     
   def process(self, action):
