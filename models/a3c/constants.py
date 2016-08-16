@@ -26,7 +26,11 @@ TESTING_DAYS = 1
 SEQUENCE_LENGTH = 84 * 8 / 4 # = 84 * 84 / 4 - 1
 FEATURES_LIST = [2,3,4,5] 
 STORE_PATH = './training_data_large/', 
-TRADING_FEE = 0.2
+
+# Trading fee (per roundturn)
+# Stefan: AMP/XTRADER/TTNET: FDAX = 0.125P per roundturn
+TRADING_FEE = 0.125
+
 SHOW_TRADES = False # Default, can be overwritten when calling GameState() or Trading()
 
 
