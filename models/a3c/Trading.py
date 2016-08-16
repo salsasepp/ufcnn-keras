@@ -178,7 +178,7 @@ class Trading(object):
                     close_trade = True
 
         if close_trade and self.show_trades:
-                print("CLOSE: ", self.current_index, last_position, self.initrate, self.last_pnl)
+                print('CLOSE: {:5} {:+2} {:.1f} {}'.format(self.current_index, last_position, self.initrate, self.last_pnl))
                 self.trade_history.append((self.current_index, self.last_pnl))
 
         # move to the next time step...
@@ -199,7 +199,7 @@ class Trading(object):
 
         if self.new_trade:
             if self.show_trades:
-                print("OPEN:  ", self.current_index-1, self.position, self.initrate)
+                print('OPEN:  {:5} {:+2} {:.1f}'.format(self.current_index-1, self.position, self.initrate))
             # enforce a minimum holding period (OFFSET)
             self.current_index += OFFSET 
 
