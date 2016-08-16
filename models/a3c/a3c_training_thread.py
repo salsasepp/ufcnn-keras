@@ -63,8 +63,7 @@ class A3CTrainingThread(object):
 
   def _anneal_learning_rate(self, global_time_step):
     learning_rate = self.initial_learning_rate * (self.max_global_time_step - global_time_step) / self.max_global_time_step
-    if learning_rate < 0.0:
-      learning_rate = 0.0
+    assert learning_rate > 0, 'Learning rate {} is not >0'.format(learning_rate)
     return learning_rate
 
   def _record_score(self, sess, summary_writer, summary_op, score_input, score, global_t):
