@@ -77,7 +77,7 @@ score_input = tf.placeholder(tf.int32)
 tf.scalar_summary("score", score_input)
 
 summary_op = tf.merge_all_summaries()
-summary_writer = tf.train.SummaryWriter(LOG_FILE, sess.graph_def)
+summary_writer = tf.train.SummaryWriter(LOG_FILE, sess.graph)
 
 # init or load checkpoint with saver
 saver = tf.train.Saver()
