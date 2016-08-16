@@ -102,8 +102,8 @@ class A3CTrainingThread(object):
       values.append(value_)
 
       if (self.thread_index == 0) and (self.local_t % 100) == 0:
-        print ("pi=", pi_)
-        print (" V=", value_)
+        print(('local_t = {:10}  pi = ' + '{:7.5f} '*len(pi_) + ' V = {:8.4f} (thread {})').format(self.local_t,
+            *pi_, value_, self.thread_index))
 
       # process game
       self.game_state.process(action)
