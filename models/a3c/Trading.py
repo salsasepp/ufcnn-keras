@@ -32,7 +32,7 @@ class Trading(object):
             self.show_trades = SHOW_TRADES
         else:
             self.show_trades = show_trades
-        self.trade_history=[]
+        self.trade_history = []
 
         #print("TRADING: Testing is" ,self.testing)
         #for i in range (self.data_store.get_number_days()):
@@ -63,7 +63,7 @@ class Trading(object):
         self.daily_long_trades = 0
         self.daily_short_trades = 0
         self.daily_wins = 0.
-        self.trade_history=[]
+        self.trade_history = []
 
     def create_plot(self, testday):
         self.iday = testday
@@ -81,8 +81,8 @@ class Trading(object):
         plt.plot(bid, lw=1)
         plt.xlabel('ticks')
         plt.ylabel('Bid')
-        plt.title('Bid Rate for day '+str(testday) + " : " + str(self.data_store.get_day(self.iday)))
-        plt.savefig("Rate_"+str(testday)+".png")
+        plt.title('Bid Rate for day ' + str(testday) + " : " + str(self.data_store.get_day(self.iday)))
+        plt.savefig("Rate_" + str(testday) + ".png")
         plt.close(fig)
 
         plot_x = []
@@ -99,12 +99,12 @@ class Trading(object):
         #print(plot_y)
 
         fig = plt.figure()
-        plt.plot(plot_x, plot_y,'.')
+        plt.plot(plot_x, plot_y, '.')
 
         plt.xlabel('ticks')
         plt.ylabel('Realized PnL')
-        plt.title('Realized PnL for day '+str(testday) + " : " + str(self.data_store.get_day(self.iday)))
-        plt.savefig("PnL_"+str(testday)+".png")
+        plt.title('Realized PnL for day ' + str(testday) + " : " + str(self.data_store.get_day(self.iday)))
+        plt.savefig("PnL_" + str(testday) + ".png")
         plt.close(fig)
 
 
@@ -197,7 +197,6 @@ class Trading(object):
         # SHORT: CURRENT_ASK - INITIAL_BID
         if self.position < -0.1:
             value = self.position * (self.current_rate_ask - last_rate_ask) 
-
 
         if self.new_trade:
             if self.show_trades:
