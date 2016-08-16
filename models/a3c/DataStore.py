@@ -48,7 +48,9 @@ class DataStore(object):
 	    # We need to create the file ourselves...
             file_list = sorted(glob.glob(path+'/prod_data_*v.txt'))
 
-            if len(file_list) == 0:
+            if file_list:
+                print('Creating pickle file from', len(file_list), 'files')
+            else:
                 print ("Files "+path+"prod_data_*txt are needed. Please copy them into "+path+". Aborting.")
                 raise ValueError
 
