@@ -5,9 +5,9 @@ import numpy as np
 from a3c_util import choose_action
 from accum_trainer import AccumTrainer
 from game_state import GameState
-from game_state import ACTION_SIZE
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 
+from constants import ACTION_SIZE
 from constants import GAMMA
 from constants import LOCAL_T_MAX
 from constants import ENTROPY_BETA

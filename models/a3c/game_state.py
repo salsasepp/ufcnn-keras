@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 import sys
 import numpy as np
-#import cv2
 
-from constants import ACTION_SIZE
 from constants import SEQUENCE_LENGTH
 from constants import FEATURES_LIST
-from constants import STORE_PATH
 from constants import TRAINING_DAYS
 from constants import TESTING_DAYS
 
@@ -19,23 +16,16 @@ class GameState(object):
     np.random.seed(rand_seed)
     self._no_op_max = no_op_max
 
-    self.sequence_length = SEQUENCE_LENGTH
-    features_list = FEATURES_LIST
-    self.features_length = len(FEATURES_LIST)
-    path = STORE_PATH
-    training_days = TRAINING_DAYS
-    testing_days = TESTING_DAYS
-
     # Load the data
-    training_store = DataStore(training_days=training_days, features_list=features_list, sequence_length=self.sequence_length)
+    training_store = DataStore(training_days=TRAINING_DAYS, features_list=FEATURES_LIST, sequence_length=SEQUENCE_LENGTH)
 
     if testing:
         print("Set up for testing")
-        testing_store = DataStore(training_days=training_days, testing_days=testing_days, features_list=features_list, 
-            sequence_length=self.sequence_length, mean=training_store.mean, std=training_store.std)
-        self.environment = Trading(data_store=testing_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
+        testing_store = DataStore(training_days=TRAINING_DAYS, testing_days=TESTING_DAYS, features_list=FEATURES_LIST, 
+            sequence_length=SEQUENCE_LENGTH, mean=training_store.mean, std=training_store.std)
+        self.environment = Trading(data_store=testing_store, sequence_length=SEQUENCE_LENGTH, features_length=len(FEATURES_LIST), testing=testing, show_trades=show_trades)
     else:
-        self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
+        self.environment = Trading(data_store=training_store, sequence_length=SEQUENCE_LENGTH, features_length=len(FEATURES_LIST), testing=testing, show_trades=show_trades)
     self.old_x = 0.
 
     self.reset()
