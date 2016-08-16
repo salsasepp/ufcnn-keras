@@ -60,10 +60,9 @@ else:
 
 game_state = GameState(0, display=True, testing=True, show_trades=True)
 
-testing_days = TESTING_DAYS
 total_pnl = 0
 
-for i in range(testing_days):
+for i in range(TESTING_DAYS):
     print("Working on day ",i)
     terminal = False
     daily_pnl = 0
@@ -93,7 +92,7 @@ for i in range(testing_days):
 print("Total Realized PnL: ", total_pnl)
 
 
-for i in range(testing_days):
+for i in range(TESTING_DAYS):
     print("Potting day ",i)
     
 
