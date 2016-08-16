@@ -29,8 +29,6 @@ class Trading(object):
         self.initrate_store = {}
         self.features_length = features_length
         # Will be broadcasted to the other Modules. Change if changing actions below...
-        self.action_count = 3
-        self.trading_fee = 0.2
         self.testing = testing
         self.iday = -1 # for testing
         if show_trades is None:
