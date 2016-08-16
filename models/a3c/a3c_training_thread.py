@@ -30,8 +30,7 @@ class A3CTrainingThread(object):
         self.max_global_time_step = max_global_time_step
 
         if USE_LSTM:
-            self.local_network = GameACLSTMNetwork(
-                ACTION_SIZE, thread_index, device)
+            self.local_network = GameACLSTMNetwork(ACTION_SIZE, thread_index, device)
         else:
             self.local_network = GameACFFNetwork(ACTION_SIZE, device)
 
@@ -92,8 +91,7 @@ class A3CTrainingThread(object):
         start_local_t = self.local_t
         terminal_end = False
         for i in range(LOCAL_T_MAX):
-            pi_, value_ = self.local_network.run_policy_and_value(
-                sess, self.game_state.s_t)
+            pi_, value_ = self.local_network.run_policy_and_value(sess, self.game_state.s_t)
             action = choose_action(pi_)
 
             states.append(self.game_state.s_t)
@@ -102,9 +100,8 @@ class A3CTrainingThread(object):
 
             # Debug output for progress
             if (self.thread_index == 0) and (self.local_t % 100) == 0:
-                print(
-                    ('local_t = {:10}  pi = ' + '{:7.5f} ' * len(pi_) + ' V = {:8.4f} (thread {})').format(self.local_t,
-                                                                                                           *pi_, value_, self.thread_index))
+                print(('local_t = {:10}  pi = ' + '{:7.5f} ' * len(pi_) + ' V = {:8.4f} (thread {})').format(self.local_t,
+                                                                                                             *pi_, value_, self.thread_index))
 
             # process game
             self.game_state.process(action)
@@ -138,9 +135,7 @@ class A3CTrainingThread(object):
                     self.local_network.reset_state()
                 break
 
-        R = 0.0
-        if not terminal_end:
-            R = self.local_network.run_value(sess, self.game_state.s_t)
+        R = 0.0 if terminal_end else self.local_network.run_value(sess, self.game_state.s_t)
 
         actions.reverse()
         states.reverse()

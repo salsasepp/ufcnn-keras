@@ -7,12 +7,7 @@ from game_state import GameState
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 
 from constants import ACTION_SIZE
-from constants import PARALLEL_SIZE
 from constants import CHECKPOINT_DIR
-from constants import RMSP_EPSILON
-from constants import RMSP_ALPHA
-from constants import GRAD_NORM_CLIP
-from constants import USE_GPU
 from constants import USE_LSTM
 from constants import TESTING_DAYS
 

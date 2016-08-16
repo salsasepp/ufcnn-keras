@@ -234,4 +234,4 @@ class Trading(object):
         if terminal:
             print ("Daily: index/pnl$/win$/short/long/", self.current_index, self.daily_pnl, self.daily_wins, self.daily_short_trades, self.daily_long_trades)
 
-        return reward, terminal, screen # Screen is 84 x 84 i
+        return reward, terminal, screen
