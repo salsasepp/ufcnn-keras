@@ -23,7 +23,7 @@ USE_LSTM = True  # True for A3C LSTM, False for A3C FF !!ATTENTION A3C FF is cur
 # TRADING PARAMETERS
 TRAINING_DAYS = 2
 TESTING_DAYS = 1
-SEQUENCE_LENGTH = 84 * 8 / 4  # = 84 * 84 / 4 - 1
+SEQUENCE_LENGTH = 84 * 8 // 4  # = 84 * 84 / 4 - 1
 FEATURES_LIST = [2, 3, 4, 5]
 STORE_PATH = './training_data_large/',
 
