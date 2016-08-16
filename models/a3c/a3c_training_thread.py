@@ -78,20 +78,18 @@ class A3CTrainingThread(object):
     rewards = []
     values = []
 
-    terminal_end = False
-
     # reset accumulated gradients
     sess.run( self.reset_gradients )
 
     # copy weights from shared to local
     sess.run( self.sync )
 
-    start_local_t = self.local_t
-
     if USE_LSTM:
       start_lstm_state = self.local_network.lstm_state_out
     
     # t_max times loop
+    start_local_t = self.local_t
+    terminal_end = False
     for i in range(LOCAL_T_MAX):
       pi_, value_ = self.local_network.run_policy_and_value(sess, self.game_state.s_t)
       action = choose_action(pi_)
@@ -100,6 +98,7 @@ class A3CTrainingThread(object):
       actions.append(action)
       values.append(value_)
 
+      # Debug output for progress
       if (self.thread_index == 0) and (self.local_t % 100) == 0:
         print(('local_t = {:10}  pi = ' + '{:7.5f} '*len(pi_) + ' V = {:8.4f} (thread {})').format(self.local_t,
             *pi_, value_, self.thread_index))
@@ -114,6 +113,7 @@ class A3CTrainingThread(object):
       self.episode_reward += reward
 
       # clip reward
+      # BUG: Does this make sense?
       rewards.append( np.clip(reward, -1, 1) )
 
       self.local_t += 1
@@ -165,8 +165,6 @@ class A3CTrainingThread(object):
       batch_a.reverse()
       batch_td.reverse()
       batch_R.reverse()
-
-
 
       sess.run( self.accum_gradients,
                 feed_dict = {

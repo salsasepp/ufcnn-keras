@@ -14,9 +14,6 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 
-
-
-
 class Trading(object):
 
     def __init__(self, data_store=None, sequence_length=500, features_length=32, testing=False, show_trades=None ):
