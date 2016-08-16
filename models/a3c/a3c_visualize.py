@@ -25,27 +25,27 @@ from constants import USE_LSTM
 device = "/cpu:0"
 
 if USE_LSTM:
-  global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
+    global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
 else:
-  global_network = GameACFFNetwork(ACTION_SIZE, device)
+    global_network = GameACFFNetwork(ACTION_SIZE, device)
 
 training_threads = []
 
 learning_rate_input = tf.placeholder("float")
 
-grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
-                              decay = RMSP_ALPHA,
-                              momentum = 0.0,
-                              epsilon = RMSP_EPSILON,
-                              clip_norm = GRAD_NORM_CLIP,
-                              device = device)
+grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
+                              decay=RMSP_ALPHA,
+                              momentum=0.0,
+                              epsilon=RMSP_EPSILON,
+                              clip_norm=GRAD_NORM_CLIP,
+                              device=device)
 
 for i in range(PARALLEL_SIZE):
-  training_thread = A3CTrainingThread(i, global_network, 1.0,
-                                      learning_rate_input,
-                                      grad_applier, MAX_TIME_STEP,
-                                      device = device)
-  training_threads.append(training_thread)
+    training_thread = A3CTrainingThread(i, global_network, 1.0,
+                                        learning_rate_input,
+                                        grad_applier, MAX_TIME_STEP,
+                                        device=device)
+    training_threads.append(training_thread)
 
 sess = tf.Session()
 init = tf.initialize_all_variables()
@@ -54,24 +54,23 @@ sess.run(init)
 saver = tf.train.Saver()
 checkpoint = tf.train.get_checkpoint_state(CHECKPOINT_DIR)
 if checkpoint and checkpoint.model_checkpoint_path:
-  saver.restore(sess, checkpoint.model_checkpoint_path)
-  print "checkpoint loaded:", checkpoint.model_checkpoint_path
+    saver.restore(sess, checkpoint.model_checkpoint_path)
+    print "checkpoint loaded:", checkpoint.model_checkpoint_path
 else:
-  print "Could not find old checkpoint"
-  
+    print "Could not find old checkpoint"
+
 W_conv1 = sess.run(global_network.W_conv1)
 
 # show graph of W_conv1
 fig, axes = plt.subplots(4, 16, figsize=(12, 6),
-             subplot_kw={'xticks': [], 'yticks': []})
+                         subplot_kw={'xticks': [], 'yticks': []})
 fig.subplots_adjust(hspace=0.1, wspace=0.1)
 
-for ax,i in zip(axes.flat, range(4*16)):
-  inch = i/16
-  outch = i%16
-  img = W_conv1[:,:,inch,outch]
-  ax.imshow(img, cmap=plt.cm.gray, interpolation='nearest')
-  ax.set_title(str(inch) + "," + str(outch))
+for ax, i in zip(axes.flat, range(4 * 16)):
+    inch = i / 16
+    outch = i % 16
+    img = W_conv1[:, :, inch, outch]
+    ax.imshow(img, cmap=plt.cm.gray, interpolation='nearest')
+    ax.set_title(str(inch) + "," + str(outch))
 
 plt.show()
-

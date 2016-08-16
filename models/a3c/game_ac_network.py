@@ -6,276 +6,308 @@ from custom_lstm import CustomBasicLSTMCell
 # Actor-Critic Network Base Class
 # (Policy network and Value network)
 
+
 class GameACNetwork(object):
-  def __init__(self,
-               action_size,
-               device="/cpu:0"):
-    self._device = device
-    self._action_size = action_size
 
-  def prepare_loss(self, entropy_beta):
-    with tf.device(self._device):
-      # taken action (input for policy)
-      self.a = tf.placeholder("float", [None, self._action_size])
-    
-      # temporary difference (R-V) (input for policy)
-      self.td = tf.placeholder("float", [None])
-      
-      # policy entropy
-      entropy = -tf.reduce_sum(self.pi * tf.log(self.pi), reduction_indices=1)
+    def __init__(self,
+                 action_size,
+                 device="/cpu:0"):
+        self._device = device
+        self._action_size = action_size
 
-      ##self.pi = tf.Print(self.pi, [self.pi], message="This is self.pi: ", summarize=40)
-      ##self.a = tf.Print(self.a, [self.a], message="This is self.a: ", summarize=40)
-      
-      # policy loss (output)  (add minus, because this is for gradient ascent)
-      policy_loss = - tf.reduce_sum( tf.reduce_sum( tf.mul( tf.log(self.pi), self.a ), reduction_indices=1 ) * self.td + entropy * entropy_beta )
+    def prepare_loss(self, entropy_beta):
+        with tf.device(self._device):
+            # taken action (input for policy)
+            self.a = tf.placeholder("float", [None, self._action_size])
 
-      # R (input for value)
-      self.r = tf.placeholder("float", [None])
-      
-      # value loss (output)
-      # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-      ##print("HHH",self.r.get_shape())
-      ##print("HHH",self.v.get_shape())
-      ##self.r = tf.Print(self.r, [self.r], message="This is self.r: ", summarize=40)
-      ##self.v = tf.Print(self.v, [self.v], message="This is self.v: ", summarize=40)
-      value_loss = 0.5 * tf.nn.l2_loss(self.r - self.v)
+            # temporary difference (R-V) (input for policy)
+            self.td = tf.placeholder("float", [None])
 
-      # gradienet of policy and value are summed up
-      self.total_loss = policy_loss + value_loss
+            # policy entropy
+            entropy = - \
+                tf.reduce_sum(self.pi * tf.log(self.pi), reduction_indices=1)
 
-  def run_policy_and_value(self, sess, s_t):
-    raise NotImplementedError()
-    
-  def run_policy(self, sess, s_t):
-    raise NotImplementedError()
+            # self.pi = tf.Print(self.pi, [self.pi], message="This is self.pi: ", summarize=40)
+            # self.a = tf.Print(self.a, [self.a], message="This is self.a: ",
+            # summarize=40)
 
-  def run_value(self, sess, s_t):
-    raise NotImplementedError()    
+            # policy loss (output)  (add minus, because this is for gradient
+            # ascent)
+            policy_loss = - \
+                tf.reduce_sum(
+                    tf.reduce_sum(tf.mul(tf.log(self.pi), self.a), reduction_indices=1) * self.td + entropy * entropy_beta)
 
-  def get_vars(self):
-    raise NotImplementedError()
+            # R (input for value)
+            self.r = tf.placeholder("float", [None])
 
-  def sync_from(self, src_netowrk, name=None):
-    src_vars = src_netowrk.get_vars()
-    dst_vars = self.get_vars()
+            # value loss (output)
+            # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
+            # print("HHH",self.r.get_shape())
+            # print("HHH",self.v.get_shape())
+            # self.r = tf.Print(self.r, [self.r], message="This is self.r: ", summarize=40)
+            # self.v = tf.Print(self.v, [self.v], message="This is self.v: ",
+            # summarize=40)
+            value_loss = 0.5 * tf.nn.l2_loss(self.r - self.v)
 
-    sync_ops = []
+            # gradienet of policy and value are summed up
+            self.total_loss = policy_loss + value_loss
 
-    with tf.device(self._device):
-      with tf.op_scope([], name, "GameACNetwork") as name:
-        for(src_var, dst_var) in zip(src_vars, dst_vars):
-          sync_op = tf.assign(dst_var, src_var)
-          sync_ops.append(sync_op)
+    def run_policy_and_value(self, sess, s_t):
+        raise NotImplementedError()
 
-        return tf.group(*sync_ops, name=name)
+    def run_policy(self, sess, s_t):
+        raise NotImplementedError()
 
-  # weight initialization based on muupan's code
-  # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
-  def _fc_weight_variable(self, shape):
-    input_channels = shape[0]
-    d = 1.0 / np.sqrt(input_channels)
-    initial = tf.random_uniform(shape, minval=-d, maxval=d)
-    return tf.Variable(initial)
+    def run_value(self, sess, s_t):
+        raise NotImplementedError()
 
-  def _fc_bias_variable(self, shape, input_channels):
-    d = 1.0 / np.sqrt(input_channels)
-    initial = tf.random_uniform(shape, minval=-d, maxval=d)
-    return tf.Variable(initial)  
+    def get_vars(self):
+        raise NotImplementedError()
 
-  def _conv_weight_variable(self, shape):
-    w = shape[0]
-    h = shape[1]
-    input_channels = shape[2]
-    d = 1.0 / np.sqrt(input_channels * w * h)
-    initial = tf.random_uniform(shape, minval=-d, maxval=d)
-    return tf.Variable(initial)
+    def sync_from(self, src_netowrk, name=None):
+        src_vars = src_netowrk.get_vars()
+        dst_vars = self.get_vars()
 
-  def _conv_bias_variable(self, shape, w, h, input_channels):
-    d = 1.0 / np.sqrt(input_channels * w * h)
-    initial = tf.random_uniform(shape, minval=-d, maxval=d)
-    return tf.Variable(initial)
+        sync_ops = []
 
-  def _conv2d(self, x, W, stride):
-    return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = "VALID")
+        with tf.device(self._device):
+            with tf.op_scope([], name, "GameACNetwork") as name:
+                for(src_var, dst_var) in zip(src_vars, dst_vars):
+                    sync_op = tf.assign(dst_var, src_var)
+                    sync_ops.append(sync_op)
+
+                return tf.group(*sync_ops, name=name)
+
+    # weight initialization based on muupan's code
+    # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
+    def _fc_weight_variable(self, shape):
+        input_channels = shape[0]
+        d = 1.0 / np.sqrt(input_channels)
+        initial = tf.random_uniform(shape, minval=-d, maxval=d)
+        return tf.Variable(initial)
+
+    def _fc_bias_variable(self, shape, input_channels):
+        d = 1.0 / np.sqrt(input_channels)
+        initial = tf.random_uniform(shape, minval=-d, maxval=d)
+        return tf.Variable(initial)
+
+    def _conv_weight_variable(self, shape):
+        w = shape[0]
+        h = shape[1]
+        input_channels = shape[2]
+        d = 1.0 / np.sqrt(input_channels * w * h)
+        initial = tf.random_uniform(shape, minval=-d, maxval=d)
+        return tf.Variable(initial)
+
+    def _conv_bias_variable(self, shape, w, h, input_channels):
+        d = 1.0 / np.sqrt(input_channels * w * h)
+        initial = tf.random_uniform(shape, minval=-d, maxval=d)
+        return tf.Variable(initial)
+
+    def _conv2d(self, x, W, stride):
+        return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="VALID")
 
 # Actor-Critic FF Network
 
+
 class GameACFFNetwork(GameACNetwork):
-  def __init__(self,
-               action_size,
-               device="/cpu:0"):
-    GameACNetwork.__init__(self, action_size, device)
-    
-    with tf.device(self._device):
-      self.W_conv1 = self._conv_weight_variable([8, 4, 4, 16])  # stride=4
-      self.b_conv1 = self._conv_bias_variable([16], 8, 4, 4)
 
-      self.W_conv2 = self._conv_weight_variable([8, 4, 16, 32]) # stride=2
-      self.b_conv2 = self._conv_bias_variable([32], 8, 4, 16)
+    def __init__(self,
+                 action_size,
+                 device="/cpu:0"):
+        GameACNetwork.__init__(self, action_size, device)
 
-      self.W_fc1 = self._fc_weight_variable([2592, 256])
-      self.b_fc1 = self._fc_bias_variable([256], 2592)
+        with tf.device(self._device):
+            self.W_conv1 = self._conv_weight_variable(
+                [8, 4, 4, 16])  # stride=4
+            self.b_conv1 = self._conv_bias_variable([16], 8, 4, 4)
 
-      # weight for policy output layer
-      self.W_fc2 = self._fc_weight_variable([256, action_size])
-      self.b_fc2 = self._fc_bias_variable([action_size], 256)
+            self.W_conv2 = self._conv_weight_variable(
+                [8, 4, 16, 32])  # stride=2
+            self.b_conv2 = self._conv_bias_variable([32], 8, 4, 16)
 
-      # weight for value output layer
-      self.W_fc3 = self._fc_weight_variable([256, 1])
-      self.b_fc3 = self._fc_bias_variable([1], 256)
+            self.W_fc1 = self._fc_weight_variable([2592, 256])
+            self.b_fc1 = self._fc_bias_variable([256], 2592)
 
-      # state (input)
-      #self.s = tf.placeholder("float", [None, 84, 84, 4])
-      self.s = tf.placeholder("float", [None, 84, 84])
-    
-      h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
-      h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
+            # weight for policy output layer
+            self.W_fc2 = self._fc_weight_variable([256, action_size])
+            self.b_fc2 = self._fc_bias_variable([action_size], 256)
 
-      h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
-      h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
+            # weight for value output layer
+            self.W_fc3 = self._fc_weight_variable([256, 1])
+            self.b_fc3 = self._fc_bias_variable([1], 256)
 
-      # policy (output)
-      self.pi = tf.nn.softmax(tf.matmul(h_fc1, self.W_fc2) + self.b_fc2)
-      # value (output)
-      v_ = tf.matmul(h_fc1, self.W_fc3) + self.b_fc3
-      self.v = tf.reshape( v_, [-1] )
-      print("SHAPE ", self.v.get_shape())
+            # state (input)
+            # self.s = tf.placeholder("float", [None, 84, 84, 4])
+            self.s = tf.placeholder("float", [None, 84, 84])
 
-  def run_policy_and_value(self, sess, s_t):
-    pi_out, v_out = sess.run( [self.pi, self.v], feed_dict = {self.s : [s_t]} )
-    return (pi_out[0], v_out[0])
+            h_conv1 = tf.nn.relu(
+                self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
+            h_conv2 = tf.nn.relu(
+                self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-  def run_policy(self, sess, s_t):
-    pi_out = sess.run( self.pi, feed_dict = {self.s : [s_t]} )
-    return pi_out[0]
+            h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
+            h_fc1 = tf.nn.relu(
+                tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
 
-  def run_value(self, sess, s_t):
-    v_out = sess.run( self.v, feed_dict = {self.s : [s_t]} )
-    return v_out[0]
+            # policy (output)
+            self.pi = tf.nn.softmax(tf.matmul(h_fc1, self.W_fc2) + self.b_fc2)
+            # value (output)
+            v_ = tf.matmul(h_fc1, self.W_fc3) + self.b_fc3
+            self.v = tf.reshape(v_, [-1])
+            print("SHAPE ", self.v.get_shape())
 
-  def get_vars(self):
-    return [self.W_conv1, self.b_conv1,
-            self.W_conv2, self.b_conv2,
-            self.W_fc1, self.b_fc1,
-            self.W_fc2, self.b_fc2,
-            self.W_fc3, self.b_fc3]
+    def run_policy_and_value(self, sess, s_t):
+        pi_out, v_out = sess.run(
+            [self.pi, self.v], feed_dict={self.s: [s_t]})
+        return (pi_out[0], v_out[0])
+
+    def run_policy(self, sess, s_t):
+        pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
+        return pi_out[0]
+
+    def run_value(self, sess, s_t):
+        v_out = sess.run(self.v, feed_dict={self.s: [s_t]})
+        return v_out[0]
+
+    def get_vars(self):
+        return [self.W_conv1, self.b_conv1,
+                self.W_conv2, self.b_conv2,
+                self.W_fc1, self.b_fc1,
+                self.W_fc2, self.b_fc2,
+                self.W_fc3, self.b_fc3]
 
 # Actor-Critic LSTM Network
 
+
 class GameACLSTMNetwork(GameACNetwork):
-  def __init__(self,
-               action_size,
-               thread_index, # -1 for global
-               device="/cpu:0" ):
-    GameACNetwork.__init__(self, action_size, device)    
 
-    with tf.device(self._device):
-      self.W_conv1 = self._conv_weight_variable([8, 1, 4, 16])  # stride=4
-      self.b_conv1 = self._conv_bias_variable([16], 8, 1, 1)
+    def __init__(self,
+                 action_size,
+                 thread_index,  # -1 for global
+                 device="/cpu:0"):
+        GameACNetwork.__init__(self, action_size, device)
 
-      self.W_conv2 = self._conv_weight_variable([1, 1, 16, 32]) # stride=2
-      self.b_conv2 = self._conv_bias_variable([32], 1, 1, 16)
+        with tf.device(self._device):
+            self.W_conv1 = self._conv_weight_variable(
+                [8, 1, 4, 16])  # stride=4
+            self.b_conv1 = self._conv_bias_variable([16], 8, 1, 1)
 
-      self.W_fc1 = self._fc_weight_variable([2592, 256])
-      self.b_fc1 = self._fc_bias_variable([256], 2592 )
+            self.W_conv2 = self._conv_weight_variable(
+                [1, 1, 16, 32])  # stride=2
+            self.b_conv2 = self._conv_bias_variable([32], 1, 1, 16)
 
-      # lstm
-      self.lstm = CustomBasicLSTMCell(256)
+            self.W_fc1 = self._fc_weight_variable([2592, 256])
+            self.b_fc1 = self._fc_bias_variable([256], 2592)
 
-      # weight for policy output layer
-      self.W_fc2 = self._fc_weight_variable([256, action_size])
-      self.b_fc2 = self._fc_bias_variable([action_size], 256)
+            # lstm
+            self.lstm = CustomBasicLSTMCell(256)
 
-      # weight for value output layer
-      self.W_fc3 = self._fc_weight_variable([256, 1])
-      self.b_fc3 = self._fc_bias_variable([1], 256)
+            # weight for policy output layer
+            self.W_fc2 = self._fc_weight_variable([256, action_size])
+            self.b_fc2 = self._fc_bias_variable([action_size], 256)
 
-      # state (input)
-      #self.s = tf.placeholder("float", [None, 84, 84, 4])
-      self.s = tf.placeholder("float", [None, 168, 1, 4])
-    
-      h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 1) + self.b_conv1)
-      h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
+            # weight for value output layer
+            self.W_fc3 = self._fc_weight_variable([256, 1])
+            self.b_fc3 = self._fc_bias_variable([1], 256)
 
-      h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
-      h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
-      # h_fc1 shape=(5,256)
-      ##h_fc1 = tf.Print(h_fc1, [h_fc1], message="NN This is h_fc1: ", summarize=40)
+            # state (input)
+            # self.s = tf.placeholder("float", [None, 84, 84, 4])
+            self.s = tf.placeholder("float", [None, 168, 1, 4])
 
-      h_fc1_reshaped = tf.reshape(h_fc1, [1,-1,256])
-      # h_fc_reshaped = (1,5,256)
+            h_conv1 = tf.nn.relu(
+                self._conv2d(self.s, self.W_conv1, 1) + self.b_conv1)
+            h_conv2 = tf.nn.relu(
+                self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-      self.step_size = tf.placeholder(tf.float32, [1])
+            h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
+            h_fc1 = tf.nn.relu(
+                tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
+            # h_fc1 shape=(5,256)
+            # h_fc1 = tf.Print(h_fc1, [h_fc1], message="NN This is h_fc1: ",
+            # summarize=40)
 
-      self.initial_lstm_state = tf.placeholder(tf.float32, [1, self.lstm.state_size])
-      
-      scope = "net_" + str(thread_index)
+            h_fc1_reshaped = tf.reshape(h_fc1, [1, -1, 256])
+            # h_fc_reshaped = (1,5,256)
 
-      # time_major = False, so output shape is [batch_size, max_time, cell.output_size]
-      lstm_outputs, self.lstm_state = tf.nn.dynamic_rnn(self.lstm,
-                                                        h_fc1_reshaped,
-                                                        initial_state = self.initial_lstm_state,
-                                                        sequence_length = self.step_size,
-                                                        time_major = False,
-                                                        scope = scope)
+            self.step_size = tf.placeholder(tf.float32, [1])
 
-      # lstm_outputs: (1,5,256), (1,1,256)
-      
-      lstm_outputs = tf.reshape(lstm_outputs, [-1,256])
+            self.initial_lstm_state = tf.placeholder(
+                tf.float32, [1, self.lstm.state_size])
 
-      # policy (output)
-      self.pi = tf.nn.softmax(tf.matmul(lstm_outputs, self.W_fc2) + self.b_fc2)
-      ##self.pi = tf.Print(self.pi, [self.pi], message="NN This is self.pi: ", summarize=40)
-      
-      # value (output)
-      v_ = tf.matmul(lstm_outputs, self.W_fc3) + self.b_fc3
-      ##v_ = tf.Print(v_, [v_], message="NN This is v_ ", summarize=40)
-      self.v = tf.reshape( v_, [-1] )
-      ##self.v = tf.Print(self.v, [self.v], message="NN This is self.v: ", summarize=40)
+            scope = "net_" + str(thread_index)
 
-      # in OK  tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v: [-0.036351625]
-      #I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.pi: [0.49193981 0.50806022]
-      #I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v: [-0.03456594]
+            # time_major = False, so output shape is [batch_size, max_time,
+            # cell.output_size]
+            lstm_outputs, self.lstm_state = tf.nn.dynamic_rnn(self.lstm,
+                                                              h_fc1_reshaped,
+                                                              initial_state=self.initial_lstm_state,
+                                                              sequence_length=self.step_size,
+                                                              time_major=False,
+                                                              scope=scope)
 
-      print("SHAPE ", self.v)
+            # lstm_outputs: (1,5,256), (1,1,256)
 
-      self.reset_state()
-      
-  def reset_state(self):
-    self.lstm_state_out = np.zeros([1, self.lstm.state_size])
+            lstm_outputs = tf.reshape(lstm_outputs, [-1, 256])
 
-  def run_policy_and_value(self, sess, s_t):
-    pi_out, v_out, self.lstm_state_out = sess.run( [self.pi, self.v, self.lstm_state],
-                                                   feed_dict = {self.s : [s_t],
-                                                                self.initial_lstm_state : self.lstm_state_out,
-                                                                self.step_size : [1]} )
-    # pi_out: (1,3), v_out: (1)
-    return (pi_out[0], v_out[0])
+            # policy (output)
+            self.pi = tf.nn.softmax(
+                tf.matmul(lstm_outputs, self.W_fc2) + self.b_fc2)
+            # self.pi = tf.Print(self.pi, [self.pi], message="NN This is
+            # self.pi: ", summarize=40)
 
-  def run_policy(self, sess, s_t):
-    pi_out, self.lstm_state_out = sess.run( [self.pi, self.lstm_state],
-                                            feed_dict = {self.s : [s_t],
-                                                         self.initial_lstm_state : self.lstm_state_out,
-                                                         self.step_size : [1]} )
-                                            
-    return pi_out[0]
+            # value (output)
+            v_ = tf.matmul(lstm_outputs, self.W_fc3) + self.b_fc3
+            # v_ = tf.Print(v_, [v_], message="NN This is v_ ", summarize=40)
+            self.v = tf.reshape(v_, [-1])
+            # self.v = tf.Print(self.v, [self.v], message="NN This is self.v:
+            # ", summarize=40)
 
-  def run_value(self, sess, s_t):
-    prev_lstm_state_out = self.lstm_state_out
-    v_out, _ = sess.run( [self.v, self.lstm_state],
-                         feed_dict = {self.s : [s_t],
-                                      self.initial_lstm_state : self.lstm_state_out,
-                                      self.step_size : [1]} )
-    
-    # roll back lstm state
-    self.lstm_state_out = prev_lstm_state_out
-    return v_out[0]
+            # in OK  tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v: [-0.036351625]
+            # I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.pi: [0.49193981 0.50806022]
+            # I tensorflow/core/kernels/logging_ops.cc:79] NN This is self.v:
+            # [-0.03456594]
 
-  def get_vars(self):
-    return [self.W_conv1, self.b_conv1,
-            self.W_conv2, self.b_conv2,
-            self.W_fc1, self.b_fc1,
-            self.lstm.matrix, self.lstm.bias,
-            self.W_fc2, self.b_fc2,
-            self.W_fc3, self.b_fc3]
+            print("SHAPE ", self.v)
+
+            self.reset_state()
+
+    def reset_state(self):
+        self.lstm_state_out = np.zeros([1, self.lstm.state_size])
+
+    def run_policy_and_value(self, sess, s_t):
+        pi_out, v_out, self.lstm_state_out = sess.run(
+            [self.pi, self.v, self.lstm_state],
+                                                       feed_dict={self.s: [
+                                                           s_t],
+                                                           self.initial_lstm_state: self.lstm_state_out,
+                                                                    self.step_size: [1]})
+        # pi_out: (1,3), v_out: (1)
+        return (pi_out[0], v_out[0])
+
+    def run_policy(self, sess, s_t):
+        pi_out, self.lstm_state_out = sess.run([self.pi, self.lstm_state],
+                                               feed_dict={self.s: [s_t],
+                                                          self.initial_lstm_state: self.lstm_state_out,
+                                                          self.step_size: [1]})
+
+        return pi_out[0]
+
+    def run_value(self, sess, s_t):
+        prev_lstm_state_out = self.lstm_state_out
+        v_out, _ = sess.run([self.v, self.lstm_state],
+                            feed_dict={self.s: [s_t],
+                                       self.initial_lstm_state: self.lstm_state_out,
+                                       self.step_size: [1]})
+
+        # roll back lstm state
+        self.lstm_state_out = prev_lstm_state_out
+        return v_out[0]
+
+    def get_vars(self):
+        return [self.W_conv1, self.b_conv1,
+                self.W_conv2, self.b_conv2,
+                self.W_fc1, self.b_fc1,
+                self.lstm.matrix, self.lstm.bias,
+                self.W_fc2, self.b_fc2,
+                self.W_fc3, self.b_fc3]

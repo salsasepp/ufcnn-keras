@@ -29,11 +29,12 @@ from constants import USE_LSTM
 device = "/gpu:0" if USE_GPU else "/cpu:0"
 print("Conf: USING Device ", device)
 
+
 def log_uniform(lo, hi, rate):
-  log_lo = math.log(lo)
-  log_hi = math.log(hi)
-  v = log_lo * (1-rate) + log_hi * rate
-  return math.exp(v)
+    log_lo = math.log(lo)
+    log_hi = math.log(hi)
+    v = log_lo * (1 - rate) + log_hi * rate
+    return math.exp(v)
 
 initial_learning_rate = log_uniform(INITIAL_ALPHA_LOW,
                                     INITIAL_ALPHA_HIGH,
@@ -42,28 +43,29 @@ initial_learning_rate = log_uniform(INITIAL_ALPHA_LOW,
 global_t = 0
 
 if USE_LSTM:
-  global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
+    global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
 else:
-  global_network = GameACFFNetwork(ACTION_SIZE, device)
+    global_network = GameACFFNetwork(ACTION_SIZE, device)
 
 
 learning_rate_input = tf.placeholder("float")
 
-grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
-                              decay = RMSP_ALPHA,
-                              momentum = 0.0,
-                              epsilon = RMSP_EPSILON,
-                              clip_norm = GRAD_NORM_CLIP,
-                              device = device)
+grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
+                              decay=RMSP_ALPHA,
+                              momentum=0.0,
+                              epsilon=RMSP_EPSILON,
+                              clip_norm=GRAD_NORM_CLIP,
+                              device=device)
 print("Conf: PARALLEL_SIZE: ", PARALLEL_SIZE)
 
 training_threads = []
 for i in range(PARALLEL_SIZE):
-  training_thread = A3CTrainingThread(i, global_network, initial_learning_rate,
-                                      learning_rate_input,
-                                      grad_applier, MAX_TIME_STEP,
-                                      device = device)
-  training_threads.append(training_thread)
+    training_thread = A3CTrainingThread(
+        i, global_network, initial_learning_rate,
+                                        learning_rate_input,
+                                        grad_applier, MAX_TIME_STEP,
+                                        device=device)
+    training_threads.append(training_thread)
 
 # prepare session
 sess = tf.Session(config=tf.ConfigProto(log_device_placement=False,
@@ -83,57 +85,59 @@ summary_writer = tf.train.SummaryWriter(LOG_FILE, sess.graph)
 saver = tf.train.Saver()
 checkpoint = tf.train.get_checkpoint_state(CHECKPOINT_DIR)
 if checkpoint and checkpoint.model_checkpoint_path:
-  saver.restore(sess, checkpoint.model_checkpoint_path)
-  print ("Conf: checkpoint loaded:", checkpoint.model_checkpoint_path)
-  tokens = checkpoint.model_checkpoint_path.split("-")
-  # set global step
-  global_t = int(tokens[1])
-  print (">>> global step set: ", global_t)
+    saver.restore(sess, checkpoint.model_checkpoint_path)
+    print ("Conf: checkpoint loaded:", checkpoint.model_checkpoint_path)
+    tokens = checkpoint.model_checkpoint_path.split("-")
+    # set global step
+    global_t = int(tokens[1])
+    print (">>> global step set: ", global_t)
 else:
-  print ("Conf: Could not find old checkpoint")
+    print ("Conf: Could not find old checkpoint")
 
 
 # Ctrl+C handling
 
 stop_requested = False
-    
+
+
 def signal_handler(signal, frame):
-  global stop_requested
-  print('Conf: You pressed Ctrl+C!')
-  stop_requested = True
-  
+    global stop_requested
+    print('Conf: You pressed Ctrl+C!')
+    stop_requested = True
+
 signal.signal(signal.SIGINT, signal_handler)
 
 
 def train_function(parallel_index):
-  global global_t
+    global global_t
 
-  while not stop_requested and global_t <= MAX_TIME_STEP:
-    diff_global_t = training_threads[parallel_index].process(sess, global_t, summary_writer,
-                                            summary_op, score_input)
-    global_t += diff_global_t
+    while not stop_requested and global_t <= MAX_TIME_STEP:
+        diff_global_t = training_threads[parallel_index].process(
+            sess, global_t, summary_writer,
+                                        summary_op, score_input)
+        global_t += diff_global_t
 
 
 # Start threads
 train_threads = []
 for i in range(PARALLEL_SIZE):
-  train_threads.append(threading.Thread(target=train_function, args=(i,)))
+    train_threads.append(threading.Thread(target=train_function, args=(i,)))
 
 start_time = time.time()
 for t in train_threads:
-  t.start()
+    t.start()
 
 print('Press Ctrl+C to stop')
 signal.pause()
 
 # Wait for threads to end
 for t in train_threads:
-  t.join()
+    t.join()
 end_time = time.time()
 
 print('Conf: Now saving data. Please wait. Steps:', global_t)
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-saver.save(sess, CHECKPOINT_DIR + '/' + 'checkpoint', global_step = global_t)
+saver.save(sess, CHECKPOINT_DIR + '/' + 'checkpoint', global_step=global_t)
 
-print("Total Time: ", end_time-start_time, ", per Timestep: ", (end_time-start_time)/global_t)
-
+print("Total Time: ", end_time - start_time,
+      ", per Timestep: ", (end_time - start_time) / global_t)
