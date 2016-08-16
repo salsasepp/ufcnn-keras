@@ -25,13 +25,9 @@ class GameState(object):
             testing_store = DataStore(
                 training_days=TRAINING_DAYS, testing_days=TESTING_DAYS, features_list=FEATURES_LIST,
                                      sequence_length=SEQUENCE_LENGTH, mean=training_store.mean, std=training_store.std)
-            self.environment = Trading(
-                data_store=testing_store, sequence_length=SEQUENCE_LENGTH,
-                                       features_length=len(FEATURES_LIST), testing=testing, show_trades=show_trades)
+            self.environment = Trading(testing_store, sequence_length=SEQUENCE_LENGTH, testing=testing, show_trades=show_trades)
         else:
-            self.environment = Trading(
-                data_store=training_store, sequence_length=SEQUENCE_LENGTH,
-                                       features_length=len(FEATURES_LIST), testing=testing, show_trades=show_trades)
+            self.environment = Trading(training_store, sequence_length=SEQUENCE_LENGTH, testing=testing, show_trades=show_trades)
         self.old_x = 0.
 
         self.reset()
@@ -80,3 +76,4 @@ class GameState(object):
 
     def update(self):
         self.s_t = self.s_t1
+
