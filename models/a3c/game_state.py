@@ -78,17 +78,10 @@ class GameState(object):
     
     self.reward = 0
     self.terminal = False
-    #self.s_t = np.stack((x_t, x_t, x_t, x_t), axis = 2)
     self.s_t = self.rebase(x_t)
     
   def process(self, action):
-    r, t, x_t1 = self._process_frame(action)
-
-    self.reward = r
-    self.terminal = t
-
-    # stacked ...
-    #self.s_t1 = np.append(self.s_t[:,:,1:], x_t1, axis = 2)    
+    self.reward, self.terminal, x_t1 = self._process_frame(action)
     self.s_t1 = self.rebase(x_t1)
 
   def rebase(self, x):
