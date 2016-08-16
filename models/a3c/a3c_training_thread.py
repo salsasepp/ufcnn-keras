@@ -135,6 +135,8 @@ class A3CTrainingThread(object):
                     self.local_network.reset_state()
                 break
 
+        # Compute and accmulate gradients
+
         R = 0.0 if terminal_end else self.local_network.run_value(sess, self.game_state.s_t)
 
         actions.reverse()
@@ -142,12 +144,12 @@ class A3CTrainingThread(object):
         rewards.reverse()
         values.reverse()
 
+        # What is the meaning of these values?
         batch_si = []
         batch_a = []
         batch_td = []
         batch_R = []
 
-        # compute and accmulate gradients
         for(ai, ri, si, Vi) in zip(actions, rewards, states, values):
             R = ri + GAMMA * R
             td = R - Vi
@@ -192,3 +194,4 @@ class A3CTrainingThread(object):
         # return advanced local step size
         diff_local_t = self.local_t - start_local_t
         return diff_local_t
+        
