@@ -2,7 +2,6 @@
 import sys
 import numpy as np
 #import cv2
-#from ale_python_interface import ALEInterface
 
 from constants import ACTION_SIZE
 from constants import SEQUENCE_LENGTH
@@ -17,8 +16,6 @@ from Trading import Trading
 
 class GameState(object):
   def __init__(self, rand_seed, display=False, no_op_max=27, testing=False, show_trades=None):
-    #self.ale = ALEInterface()
-
     np.random.seed(rand_seed)
     self._no_op_max = no_op_max
 
@@ -41,15 +38,13 @@ class GameState(object):
         self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
     self.old_x = 0.
 
-    # height=210, width=160
-
     self.reset()
 
   def _process_frame(self, action):
     #reward = self.environment.act(action)
     #terminal = self.environment.game_over()
 
-    reward, terminal, _screen = self.environment.get_reward(action) # Screen is 84 x 84
+    reward, terminal, _screen = self.environment.get_reward(action)
 
     # TODO: What is this?
     x_t = _screen
@@ -70,10 +65,10 @@ class GameState(object):
     print("setup_display() is not implemented...")
 
   def reset(self):
-    #self.ale.reset_game()
     self.environment.reset()
     
     # randomize initial state
+    # TODO: Do we need this?
     if self._no_op_max > 0:
       no_op = np.random.randint(0, self._no_op_max + 1)
       for _ in range(no_op):
@@ -95,7 +90,6 @@ class GameState(object):
     # stacked ...
     #self.s_t1 = np.append(self.s_t[:,:,1:], x_t1, axis = 2)    
     self.s_t1 = self.rebase(x_t1)
-    # look at this here...
 
   def rebase(self, x):
     return x if len(x.shape) == 3 else np.expand_dims(x, axis=2)
