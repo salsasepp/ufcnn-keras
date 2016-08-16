@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 import numpy as np
-import random
 
 from a3c_util import choose_action
 from game_state import GameState
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
-from a3c_training_thread import A3CTrainingThread
-from rmsprop_applier import RMSPropApplier
 
 from constants import ACTION_SIZE
 from constants import PARALLEL_SIZE
@@ -54,12 +51,10 @@ for i in range(TESTING_DAYS):
 
     while not terminal:
         pi_values = global_network.run_policy(sess, game_state.s_t)
-
         action = choose_action(pi_values)
+
         game_state.process(action)
-
         reward = game_state.reward
-
         terminal = game_state.terminal
 
         game_state.update()
@@ -70,10 +65,10 @@ for i in range(TESTING_DAYS):
     game_state.environment.daily_pnl = 0
 
     print("Day ",i, ",Realized PnL: ", daily_pnl)
+
 print("Total Realized PnL: ", total_pnl)
 
 
 for i in range(TESTING_DAYS):
     print("Potting day ",i)
-    
 
