@@ -41,10 +41,6 @@ class GameState(object):
         self.environment = Trading(data_store=training_store, sequence_length=self.sequence_length, features_length=self.features_length, testing=testing, show_trades=show_trades)
     self.old_x = 0.
 
-    # collect minimal action set
-    #self.real_actions = self.ale.getMinimalActionSet()
-    self.real_actions = [0, 1, 2]
-
     # height=210, width=160
 
     self.reset()
@@ -67,6 +63,7 @@ class GameState(object):
     
     #x_t = resized_screen[18:102,:]
 
+    # TODO: What is this?
     x_t = x_t.astype(np.float32)
 
     x1 = x_t[1,0]
@@ -106,10 +103,7 @@ class GameState(object):
     self.s_t = self.rebase(x_t)
     
   def process(self, action):
-    # convert original 18 action index to minimal action set index
-    real_action = self.real_actions[action] # WHAT DOES THIS DO
-    
-    r, t, x_t1 = self._process_frame(real_action, True)
+    r, t, x_t1 = self._process_frame(action, True)
 
     self.reward = r
     self.terminal = t
