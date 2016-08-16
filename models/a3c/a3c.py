@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
-import threading
 import numpy as np
 
+import threading
 import signal
-import random
 import math
 import os
 import time
@@ -27,6 +26,8 @@ from constants import GRAD_NORM_CLIP
 from constants import USE_GPU
 from constants import USE_LSTM
 
+device = "/gpu:0" if USE_GPU else "/cpu:0"
+print("Conf: USING Device ",device)
 
 def log_uniform(lo, hi, rate):
   log_lo = math.log(lo)
@@ -34,27 +35,17 @@ def log_uniform(lo, hi, rate):
   v = log_lo * (1-rate) + log_hi * rate
   return math.exp(v)
 
-device = "/cpu:0"
-if USE_GPU:
-  device = "/gpu:0"
-
-print("Conf: USING Device ",device)
-
 initial_learning_rate = log_uniform(INITIAL_ALPHA_LOW,
                                     INITIAL_ALPHA_HIGH,
                                     INITIAL_ALPHA_LOG_RATE)
 
 global_t = 0
 
-stop_requested = False
-
 if USE_LSTM:
   global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
 else:
   global_network = GameACFFNetwork(ACTION_SIZE, device)
 
-
-training_threads = []
 
 learning_rate_input = tf.placeholder("float")
 
@@ -66,6 +57,7 @@ grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
                               device = device)
 print("Conf: PARALLEL_SIZE: ", PARALLEL_SIZE)
 
+training_threads = []
 for i in range(PARALLEL_SIZE):
   training_thread = A3CTrainingThread(i, global_network, initial_learning_rate,
                                       learning_rate_input,
@@ -101,51 +93,47 @@ else:
   print ("Conf: Could not find old checkpoint")
 
 
-def train_function(parallel_index):
-  global global_t
-  
-  training_thread = training_threads[parallel_index]
+# Ctrl+C handling
 
-  while True:
-    if stop_requested:
-      break
-    if global_t > MAX_TIME_STEP:
-      break
-
-    diff_global_t = training_thread.process(sess, global_t, summary_writer,
-                                            summary_op, score_input)
-    global_t += diff_global_t
-    
+stop_requested = False
     
 def signal_handler(signal, frame):
   global stop_requested
   print('Conf: You pressed Ctrl+C!')
   stop_requested = True
   
-train_threads = []
-start_time = time.time()
-for i in range(PARALLEL_SIZE):
-  train_threads.append(threading.Thread(target=train_function, args=(i,)))
-  
 signal.signal(signal.SIGINT, signal_handler)
 
+
+def train_function(parallel_index):
+  global global_t
+
+  while not stop_requested and global_t <= MAX_TIME_STEP:
+    diff_global_t = training_threads[parallel_index].process(sess, global_t, summary_writer,
+                                            summary_op, score_input)
+    global_t += diff_global_t
+
+
+# Start threads
+train_threads = []
+for i in range(PARALLEL_SIZE):
+  train_threads.append(threading.Thread(target=train_function, args=(i,)))
+
+start_time = time.time()
 for t in train_threads:
   t.start()
 
 print('Press Ctrl+C to stop')
 signal.pause()
 
-print('Conf: Now saving data. Please wait. Steps:', global_t)
-  
+# Wait for threads to end
 for t in train_threads:
   t.join()
-
-if not os.path.exists(CHECKPOINT_DIR):
-  os.mkdir(CHECKPOINT_DIR)  
-
-saver.save(sess, CHECKPOINT_DIR + '/' + 'checkpoint', global_step = global_t)
 end_time = time.time()
 
-print("Total Time: ", end_time-start_time, ", per Timestep: ", (end_time-start_time)/global_t)
+print('Conf: Now saving data. Please wait. Steps:', global_t)
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+saver.save(sess, CHECKPOINT_DIR + '/' + 'checkpoint', global_step = global_t)
 
+print("Total Time: ", end_time-start_time, ", per Timestep: ", (end_time-start_time)/global_t)
 
