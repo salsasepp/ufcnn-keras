@@ -17,7 +17,6 @@ from constants import RMSP_ALPHA
 from constants import GRAD_NORM_CLIP
 from constants import USE_GPU
 from constants import USE_LSTM
-
 from constants import TESTING_DAYS
 
 # use CPU for display tool
@@ -27,24 +26,6 @@ if USE_LSTM:
   global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
 else:
   global_network = GameACFFNetwork(ACTION_SIZE, device)
-
-learning_rate_input = tf.placeholder("float")
-
-grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
-                              decay = RMSP_ALPHA,
-                              momentum = 0.0,
-                              epsilon = RMSP_EPSILON,
-                              clip_norm = GRAD_NORM_CLIP,
-                              device = device)
-
-training_threads = []
-for i in range(PARALLEL_SIZE):
-  training_thread = A3CTrainingThread(i, global_network, 1.0,
-                                      learning_rate_input,
-                                      grad_applier,
-                                      8000000,
-                                      device = device)
-  training_threads.append(training_thread)
 
 sess = tf.Session()
 init = tf.initialize_all_variables()
