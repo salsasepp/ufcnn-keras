@@ -45,41 +45,25 @@ class GameState(object):
 
     self.reset()
 
-  def _process_frame(self, action, reshape):
+  def _process_frame(self, action):
     #reward = self.environment.act(action)
     #terminal = self.environment.game_over()
 
     reward, terminal, _screen = self.environment.get_reward(action) # Screen is 84 x 84
-    x_t = _screen
-
-    # screen shape is (210, 160, 1)
-    #self.ale.getScreenGrayscale(self._screen)
-    
-    # reshape it into (210, 160)
-    #reshaped_screen = np.reshape(self._screen, (210, 160))
-    
-    # resize to height=110, width=84
-    #resized_screen = cv2.resize(reshaped_screen, (84, 110))
-    
-    #x_t = resized_screen[18:102,:]
 
     # TODO: What is this?
+    x_t = _screen
     x_t = x_t.astype(np.float32)
 
     x1 = x_t[1,0]
     x2 = x_t[2,0]
 
     #print(x_t)
-
-    if reshape:
-        #x_t = np.reshape(x_t, (x_t.shape[0],1 , x_t.shape[1]))
-        pass
   
     #if (x1 != self.old_x):
     #    print(" X error", x1, x2)
     self.old_x = x2
 
-    #x_t *= (1.0/255.0)
     return reward, terminal, x_t
     
   def _setup_display(self):
@@ -95,7 +79,7 @@ class GameState(object):
       for _ in range(no_op):
          _, __, ___ = self.environment.get_reward(2) # Screen is 84 x 84
 
-    _, _, x_t = self._process_frame(2, False) # Action GO_FLAT
+    _, _, x_t = self._process_frame(2) # Action GO_FLAT
     
     self.reward = 0
     self.terminal = False
@@ -103,7 +87,7 @@ class GameState(object):
     self.s_t = self.rebase(x_t)
     
   def process(self, action):
-    r, t, x_t1 = self._process_frame(action, True)
+    r, t, x_t1 = self._process_frame(action)
 
     self.reward = r
     self.terminal = t
