@@ -4,7 +4,6 @@ import numpy as np
 #import cv2
 #from ale_python_interface import ALEInterface
 
-
 from constants import ACTION_SIZE
 from constants import SEQUENCE_LENGTH
 from constants import FEATURES_LIST
@@ -74,12 +73,10 @@ class GameState(object):
     x2 = x_t[2,0]
 
     #print(x_t)
-   
 
     if reshape:
         #x_t = np.reshape(x_t, (x_t.shape[0],1 , x_t.shape[1]))
         pass
-
   
     #if (x1 != self.old_x):
     #    print(" X error", x1, x2)
@@ -87,7 +84,6 @@ class GameState(object):
 
     #x_t *= (1.0/255.0)
     return reward, terminal, x_t
-    
     
   def _setup_display(self):
     print("setup_display() is not implemented...")
@@ -101,7 +97,6 @@ class GameState(object):
       no_op = np.random.randint(0, self._no_op_max + 1)
       for _ in range(no_op):
          _, __, ___ = self.environment.get_reward(2) # Screen is 84 x 84
-
 
     _, _, x_t = self._process_frame(2, False) # Action GO_FLAT
     
@@ -125,10 +120,8 @@ class GameState(object):
     # look at this here...
 
   def rebase(self, x):
-    if len(x.shape) == 3:
-       return x
-    else:
-       return np.expand_dims(x, axis=2)
+    return x if len(x.shape) == 3 else np.expand_dims(x, axis=2)
      
   def update(self):
     self.s_t = self.s_t1
+    

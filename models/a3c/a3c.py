@@ -27,7 +27,7 @@ from constants import USE_GPU
 from constants import USE_LSTM
 
 device = "/gpu:0" if USE_GPU else "/cpu:0"
-print("Conf: USING Device ",device)
+print("Conf: USING Device ", device)
 
 def log_uniform(lo, hi, rate):
   log_lo = math.log(lo)

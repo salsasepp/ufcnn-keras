@@ -48,9 +48,6 @@ class A3CTrainingThread(object):
       self.trainer.get_accum_grad_list() )
 
     self.sync = self.local_network.sync_from(global_network)
-
-
-    
     
     self.game_state = GameState(113 * thread_index)
     
@@ -113,7 +110,7 @@ class A3CTrainingThread(object):
       self.episode_reward += reward
 
       # clip reward
-      # BUG: Does this make sense?
+      # TODO: Does this make sense?
       rewards.append( np.clip(reward, -1, 1) )
 
       self.local_t += 1
