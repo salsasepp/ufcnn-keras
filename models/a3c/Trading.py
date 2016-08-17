@@ -51,11 +51,14 @@ class Trading(object):
 
         self.current_index = int(self.sequence_length)
 
+        # Current position
         self.position = 0.
         self.initrate = 0.
         print ("IDAY:" , self.iday, self.current_index)
    
         self.current_rate_bid_norm, self.current_rate_bid, self.current_rate_ask_norm, self.current_rate_ask = self.data_store.get_bid_ask(self.iday, self.current_index)
+
+        # Trade statistics
         self.daily_pnl = 0.
         self.last_pnl = 0.
         self.daily_trades = 0
@@ -187,16 +190,16 @@ class Trading(object):
         # and get the rates...
         self.current_rate_bid_norm, self.current_rate_bid, self.current_rate_ask_norm, self.current_rate_ask = self.data_store.get_bid_ask(self.iday, self.current_index)
 
+        # Calculate value
+        # LONG:  CURRENT_BID - INITIAL_ASK
+        # SHORT: CURRENT_ASK - INITIAL_BID
         value = 0.
-
-        # LONG: CURRENT_BID - INITIAL_ASK
         if self.position > 0.1:
             value = self.position * (self.current_rate_bid - last_rate_bid)
-
-        # SHORT: CURRENT_ASK - INITIAL_BID
-        if self.position < -0.1:
+        elif self.position < -0.1:
             value = self.position * (self.current_rate_ask - last_rate_ask) 
 
+        # New trade is opened
         if self.new_trade:
             if self.show_trades:
                 print('OPEN:  {:5} {:+2} {:.1f}'.format(self.current_index-1, self.position, self.initrate))
