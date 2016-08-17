@@ -44,7 +44,7 @@ class Trading(object):
             self.iday = np.random.randint(0, self.training_days)
         else:
             self.iday += 1 # iterate over all idays
-            if self.iday > self.data_store.get_number_days():
+            if self.iday >= self.data_store.get_number_days():
                 self.iday = 0
 
         self.day_length = self.data_store.get_day_length(self.iday)
