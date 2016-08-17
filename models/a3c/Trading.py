@@ -203,11 +203,11 @@ class Trading(object):
             # enforce a minimum holding period (OFFSET)
             self.current_index += OFFSET 
 
-        if close_trade and self.last_pnl > 0.:
-            reward += self.last_pnl # profits count twice :-)
-            self.daily_wins += self.last_pnl
-
+        # Trade is concluded, do the bookkeeping
         if close_trade:
+            if self.last_pnl > 0.:
+                reward += self.last_pnl # profits count twice :-)
+                self.daily_wins += self.last_pnl
             # PnL Calculation
             self.daily_pnl += self.last_pnl
             self.last_pnl = 0.
